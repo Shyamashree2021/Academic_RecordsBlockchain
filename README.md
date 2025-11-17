@@ -21,6 +21,12 @@
 - [License](#license)
 
 ---
+## Video
+https://drive.google.com/file/d/1CLfr22A4T6tLuH0S9R1lNe2uIhsbw4B5/view?usp=sharing
+## Frontend 
+https://github.com/princekumar828/Academic-Records-Blockchain---Frontend
+## Backend
+https://github.com/princekumar828/Academic-Records-Blockchain-Backend
 
 ## 🎯 Overview
 
