@@ -5,7 +5,7 @@ Organizations:
   - &OrdererOrg
       Name: OrdererOrg
       ID: OrdererMSP
-      MSPDir: ../organizations/ordererOrganizations/nitw.edu/msp
+      MSPDir: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/nitw.edu/msp
       Policies:
         Readers:
           Type: Signature
@@ -22,7 +22,7 @@ Organizations:
   - &NITWarangal
       Name: NITWarangalMSP
       ID: NITWarangalMSP
-      MSPDir: ../organizations/peerOrganizations/nitwarangal.nitw.edu/msp
+      MSPDir: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/nitwarangal.nitw.edu/msp
       Policies:
         Readers:
           Type: Signature
@@ -43,7 +43,7 @@ Organizations:
   - &Departments
       Name: DepartmentsMSP
       ID: DepartmentsMSP
-      MSPDir: ../organizations/peerOrganizations/departments.nitw.edu/msp
+      MSPDir: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/departments.nitw.edu/msp
       Policies:
         Readers:
           Type: Signature
@@ -64,7 +64,7 @@ Organizations:
   - &Verifiers
       Name: VerifiersMSP
       ID: VerifiersMSP
-      MSPDir: ../organizations/peerOrganizations/verifiers.nitw.edu/msp
+      MSPDir: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/verifiers.nitw.edu/msp
       Policies:
         Readers:
           Type: Signature
@@ -119,8 +119,8 @@ Orderer: &OrdererDefaults
     Consenters:
       - Host: orderer.nitw.edu
         Port: 7050
-        ClientTLSCert: ../organizations/ordererOrganizations/nitw.edu/orderers/orderer.nitw.edu/tls/server.crt
-        ServerTLSCert: ../organizations/ordererOrganizations/nitw.edu/orderers/orderer.nitw.edu/tls/server.crt
+        ClientTLSCert: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/nitw.edu/orderers/orderer.nitw.edu/tls/server.crt
+        ServerTLSCert: /opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/ordererOrganizations/nitw.edu/orderers/orderer.nitw.edu/tls/server.crt
   BatchTimeout: 2s
   BatchSize:
     MaxMessageCount: 10

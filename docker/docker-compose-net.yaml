@@ -6,9 +6,7 @@ version: '3.7'
 volumes:
   orderer.nitw.edu:
   peer0.nitwarangal.nitw.edu:
-  peer1.nitwarangal.nitw.edu:
   peer0.departments.nitw.edu:
-  peer1.departments.nitw.edu:
   peer0.verifiers.nitw.edu:
 
 networks:
@@ -16,6 +14,90 @@ networks:
     name: fabric_nitw
 
 services:
+  ca_orderer:
+    image: hyperledger/fabric-ca:latest
+    labels:
+      service: hyperledger-fabric
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca-orderer
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:17054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-orderer,localhost
+      - FABRIC_CA_SERVER_CSR_CN=ca-orderer.nitw.edu
+    ports:
+      - "7054:7054"
+      - "17054:17054"
+    volumes:
+      - ../organizations/fabric-ca/ordererOrg:/etc/hyperledger/fabric-ca-server
+    container_name: ca_orderer
+    networks:
+      - nitw
+
+  ca_nitwarangal:
+    image: hyperledger/fabric-ca:latest
+    labels:
+      service: hyperledger-fabric
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca-nitwarangal
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=8054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:18054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-nitwarangal,localhost
+      - FABRIC_CA_SERVER_CSR_CN=ca-nitwarangal.nitw.edu
+    ports:
+      - "8054:8054"
+      - "18054:18054"
+    volumes:
+      - ../organizations/fabric-ca/nitwarangal:/etc/hyperledger/fabric-ca-server
+    container_name: ca_nitwarangal
+    networks:
+      - nitw
+
+  ca_departments:
+    image: hyperledger/fabric-ca:latest
+    labels:
+      service: hyperledger-fabric
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca-departments
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=9054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:19054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-departments,localhost
+      - FABRIC_CA_SERVER_CSR_CN=ca-departments.nitw.edu
+    ports:
+      - "9054:9054"
+      - "19054:19054"
+    volumes:
+      - ../organizations/fabric-ca/departments:/etc/hyperledger/fabric-ca-server
+    container_name: ca_departments
+    networks:
+      - nitw
+
+  ca_verifiers:
+    image: hyperledger/fabric-ca:latest
+    labels:
+      service: hyperledger-fabric
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca-verifiers
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=11054
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:21054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-verifiers,localhost
+      - FABRIC_CA_SERVER_CSR_CN=ca-verifiers.nitw.edu
+    ports:
+      - "11054:11054"
+      - "21054:21054"
+    volumes:
+      - ../organizations/fabric-ca/verifiers:/etc/hyperledger/fabric-ca-server
+    container_name: ca_verifiers
+    networks:
+      - nitw
+
   orderer.nitw.edu:
     container_name: orderer.nitw.edu
     image: hyperledger/fabric-orderer:latest
@@ -69,7 +151,6 @@ services:
       - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
       - CORE_PEER_CHAINCODEADDRESS=peer0.nitwarangal.nitw.edu:7052
       - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.nitwarangal.nitw.edu:8051
       - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.nitwarangal.nitw.edu:7051
       - CORE_PEER_LOCALMSPID=NITWarangalMSP
       - CORE_PEER_TLS_ENABLED=true
@@ -86,52 +167,12 @@ services:
     command: peer node start
     volumes:
       - /var/run/docker.sock:/host/var/run/docker.sock
-      - ../../config/core.yaml:/etc/hyperledger/fabric/core.yaml
       - ../organizations/peerOrganizations/nitwarangal.nitw.edu/peers/peer0.nitwarangal.nitw.edu/msp:/etc/hyperledger/fabric/msp
       - ../organizations/peerOrganizations/nitwarangal.nitw.edu/peers/peer0.nitwarangal.nitw.edu/tls:/etc/hyperledger/fabric/tls
       - peer0.nitwarangal.nitw.edu:/var/hyperledger/production
     ports:
       - 7051:7051
       - 9446:9446
-    networks:
-      - nitw
-
-  peer1.nitwarangal.nitw.edu:
-    container_name: peer1.nitwarangal.nitw.edu
-    image: hyperledger/fabric-peer:latest
-    labels:
-      service: hyperledger-fabric
-    environment:
-      - FABRIC_LOGGING_SPEC=INFO
-      - CORE_PEER_ID=peer1.nitwarangal.nitw.edu
-      - CORE_PEER_ADDRESS=peer1.nitwarangal.nitw.edu:8051
-      - CORE_PEER_LISTENADDRESS=0.0.0.0:8051
-      - CORE_PEER_CHAINCODEADDRESS=peer1.nitwarangal.nitw.edu:8052
-      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:8052
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.nitwarangal.nitw.edu:7051
-      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.nitwarangal.nitw.edu:8051
-      - CORE_PEER_LOCALMSPID=NITWarangalMSP
-      - CORE_PEER_TLS_ENABLED=true
-      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
-      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
-      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
-      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
-      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=fabric_nitw
-      - CORE_OPERATIONS_LISTENADDRESS=peer1.nitwarangal.nitw.edu:9447
-      - CORE_METRICS_PROVIDER=prometheus
-      - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG={"peername":"peer1nitwarangal"}
-      - CORE_CHAINCODE_EXECUTETIMEOUT=300s
-    working_dir: /root
-    command: peer node start
-    volumes:
-      - /var/run/docker.sock:/host/var/run/docker.sock
-      - ../../config/core.yaml:/etc/hyperledger/fabric/core.yaml
-      - ../organizations/peerOrganizations/nitwarangal.nitw.edu/peers/peer1.nitwarangal.nitw.edu/msp:/etc/hyperledger/fabric/msp
-      - ../organizations/peerOrganizations/nitwarangal.nitw.edu/peers/peer1.nitwarangal.nitw.edu/tls:/etc/hyperledger/fabric/tls
-      - peer1.nitwarangal.nitw.edu:/var/hyperledger/production
-    ports:
-      - 8051:8051
-      - 9447:9447
     networks:
       - nitw
 
@@ -147,7 +188,6 @@ services:
       - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
       - CORE_PEER_CHAINCODEADDRESS=peer0.departments.nitw.edu:9052
       - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:9052
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.departments.nitw.edu:10051
       - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.departments.nitw.edu:9051
       - CORE_PEER_LOCALMSPID=DepartmentsMSP
       - CORE_PEER_TLS_ENABLED=true
@@ -164,52 +204,12 @@ services:
     command: peer node start
     volumes:
       - /var/run/docker.sock:/host/var/run/docker.sock
-      - ../../config/core.yaml:/etc/hyperledger/fabric/core.yaml
       - ../organizations/peerOrganizations/departments.nitw.edu/peers/peer0.departments.nitw.edu/msp:/etc/hyperledger/fabric/msp
       - ../organizations/peerOrganizations/departments.nitw.edu/peers/peer0.departments.nitw.edu/tls:/etc/hyperledger/fabric/tls
       - peer0.departments.nitw.edu:/var/hyperledger/production
     ports:
       - 9051:9051
       - 9448:9448
-    networks:
-      - nitw
-
-  peer1.departments.nitw.edu:
-    container_name: peer1.departments.nitw.edu
-    image: hyperledger/fabric-peer:latest
-    labels:
-      service: hyperledger-fabric
-    environment:
-      - FABRIC_LOGGING_SPEC=INFO
-      - CORE_PEER_ID=peer1.departments.nitw.edu
-      - CORE_PEER_ADDRESS=peer1.departments.nitw.edu:10051
-      - CORE_PEER_LISTENADDRESS=0.0.0.0:10051
-      - CORE_PEER_CHAINCODEADDRESS=peer1.departments.nitw.edu:10052
-      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:10052
-      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.departments.nitw.edu:9051
-      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.departments.nitw.edu:10051
-      - CORE_PEER_LOCALMSPID=DepartmentsMSP
-      - CORE_PEER_TLS_ENABLED=true
-      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
-      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
-      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
-      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
-      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=fabric_nitw
-      - CORE_OPERATIONS_LISTENADDRESS=peer1.departments.nitw.edu:9449
-      - CORE_METRICS_PROVIDER=prometheus
-      - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG={"peername":"peer1departments"}
-      - CORE_CHAINCODE_EXECUTETIMEOUT=300s
-    working_dir: /root
-    command: peer node start
-    volumes:
-      - /var/run/docker.sock:/host/var/run/docker.sock
-      - ../../config/core.yaml:/etc/hyperledger/fabric/core.yaml
-      - ../organizations/peerOrganizations/departments.nitw.edu/peers/peer1.departments.nitw.edu/msp:/etc/hyperledger/fabric/msp
-      - ../organizations/peerOrganizations/departments.nitw.edu/peers/peer1.departments.nitw.edu/tls:/etc/hyperledger/fabric/tls
-      - peer1.departments.nitw.edu:/var/hyperledger/production
-    ports:
-      - 10051:10051
-      - 9449:9449
     networks:
       - nitw
 
@@ -241,7 +241,6 @@ services:
     command: peer node start
     volumes:
       - /var/run/docker.sock:/host/var/run/docker.sock
-      - ../../config/core.yaml:/etc/hyperledger/fabric/core.yaml
       - ../organizations/peerOrganizations/verifiers.nitw.edu/peers/peer0.verifiers.nitw.edu/msp:/etc/hyperledger/fabric/msp
       - ../organizations/peerOrganizations/verifiers.nitw.edu/peers/peer0.verifiers.nitw.edu/tls:/etc/hyperledger/fabric/tls
       - peer0.verifiers.nitw.edu:/var/hyperledger/production
@@ -260,26 +259,28 @@ services:
     stdin_open: true
     environment:
       - GOPATH=/opt/gopath
-      - FABRIC_LOGGING_SPEC=INFO
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
-      - FABRIC_CFG_PATH=/etc/hyperledger/fabric
+      - FABRIC_LOGGING_SPEC=INFO
       - CORE_PEER_TLS_ENABLED=true
-      - CORE_PEER_LOCALMSPID=NITWarangalMSP
+      - CORE_PEER_ID=cli
       - CORE_PEER_ADDRESS=peer0.nitwarangal.nitw.edu:7051
+      - CORE_PEER_LOCALMSPID=NITWarangalMSP
       - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/nitwarangal.nitw.edu/peers/peer0.nitwarangal.nitw.edu/tls/ca.crt
       - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations/peerOrganizations/nitwarangal.nitw.edu/users/Admin@nitwarangal.nitw.edu/msp
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
     command: /bin/bash
     volumes:
+      - /var/run/:/host/var/run/
       - ../organizations:/opt/gopath/src/github.com/hyperledger/fabric/peer/organizations
-      - ../scripts:/opt/gopath/src/github.com/hyperledger/fabric/peer/scripts
+      - ../scripts:/opt/gopath/src/github.com/hyperledger/fabric/peer/scripts/
       - ../channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts
-      - ../chaincode-go:/opt/gopath/src/github.com/hyperledger/fabric/peer/chaincode
+      - ../collections_config.json:/opt/gopath/src/github.com/hyperledger/fabric/peer/collections_config.json
+      - ../configtx:/opt/gopath/src/github.com/hyperledger/fabric/peer/configtx
+      - ../chaincode-go:/opt/gopath/src/github.com/hyperledger/fabric/peer/chaincode-go
     depends_on:
+      - orderer.nitw.edu
       - peer0.nitwarangal.nitw.edu
-      - peer1.nitwarangal.nitw.edu
       - peer0.departments.nitw.edu
-      - peer1.departments.nitw.edu
       - peer0.verifiers.nitw.edu
     networks:
       - nitw

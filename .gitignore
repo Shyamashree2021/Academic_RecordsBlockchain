@@ -40,3 +40,21 @@ Thumbs.db
 
 # Docker
 *.pid
+
+# Temporary Documentation (keep only README.md, ARCHITECTURE.md, SETUP_GUIDE.md)
+*_SUMMARY.md
+*_FIX.md
+*_CHANGES.md
+*_MIGRATION.md
+*_VERIFICATION.md
+*_ANALYSIS.md
+*_FLOW.md
+*_FEATURE.md
+*_UPDATES.md
+QUICK_REFERENCE.txt
+NEXT_STEPS.md
+
+# Temporary Scripts
+*-test.sh
+deploy-*.sh
+test-*.sh
