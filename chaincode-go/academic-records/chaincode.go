@@ -12,37 +12,78 @@ import (
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
+const (
+	// studentPrivateCollection is the name of the private data collection for sensitive student data
+	studentPrivateCollection = "studentPrivateCollection"
+)
+
 // SmartContract provides functions for managing academic records
 type SmartContract struct {
 	contractapi.Contract
 }
 
-// Student represents a student in the system (Enhanced for Production)
+// Student represents the public part of a student's record
 type Student struct {
-	StudentID         string    `json:"studentId"`
-	Name              string    `json:"name"`
-	Department        string    `json:"department"`
-	EnrollmentYear    int       `json:"enrollmentYear"`
-	RollNumber        string    `json:"rollNumber"`        // Primary ID
-	Email             string    `json:"email"`             // Must be @student.nitw.ac.in
-	Phone             string    `json:"phone"`   // Optional, modifiable
-	PersonalEmail     string    `json:"personalEmail"` // Optional, modifiable
-	AadhaarHash       string    `json:"aadhaarHash"`       // SHA256 hash of Aadhaar
-	AdmissionCategory string    `json:"admissionCategory"` // GEN, OBC, SC, ST, etc.
-	Status            string    `json:"status"`            // ACTIVE, GRADUATED, WITHDRAWN, CANCELLED, TEMPORARY_WITHDRAWAL
-	CreatedBy         string    `json:"createdBy"`
-	CreatedAt         time.Time `json:"createdAt"`
-	ModifiedBy        string    `json:"modifiedBy"`
-	ModifiedAt        time.Time `json:"modifiedAt"`
+	StudentID          string    `json:"studentId"`
+	Name               string    `json:"name"`
+	Department         string    `json:"department"`
+	EnrollmentYear     int       `json:"enrollmentYear"`
+	RollNumber         string    `json:"rollNumber"` // Primary ID
+	Email              string    `json:"email"`      // Must be @student.nitw.ac.in
+	AdmissionCategory  string    `json:"admissionCategory"`
+	Status             string    `json:"status"` // ACTIVE, GRADUATED, WITHDRAWN, CANCELLED, TEMPORARY_WITHDRAWAL
+	TotalCreditsEarned float64   `json:"totalCreditsEarned"`
+	CurrentCGPA        float64   `json:"currentCGPA"`
+	CreatedBy          string    `json:"createdBy"`
+	CreatedAt          time.Time `json:"createdAt"`
+	ModifiedBy         string    `json:"modifiedBy"`
+	ModifiedAt         time.Time `json:"modifiedAt"`
 }
 
-// Course represents a single course (Enhanced with validation)
+// StudentPrivateDetails represents the private part of a student's record
+type StudentPrivateDetails struct {
+	StudentID     string `json:"studentId"`
+	Phone         string `json:"phone"`
+	PersonalEmail string `json:"personalEmail"`
+	AadhaarHash   string `json:"aadhaarHash"` // SHA256 hash of Aadhaar
+}
+
+// Department represents an academic department
+type Department struct {
+	DepartmentID   string    `json:"departmentId"`   // e.g., "CSE", "ECE", "ME"
+	DepartmentName string    `json:"departmentName"` // e.g., "Computer Science and Engineering"
+	HOD            string    `json:"hod"`            // Head of Department name
+	Email          string    `json:"email"`          // Department email
+	Phone          string    `json:"phone"`          // Department phone
+	CreatedBy      string    `json:"createdBy"`
+	CreatedAt      time.Time `json:"createdAt"`
+	ModifiedBy     string    `json:"modifiedBy"`
+	ModifiedAt     time.Time `json:"modifiedAt"`
+}
+
+// CourseOffering represents a course offered by department with many-to-many relationship
+type CourseOffering struct {
+	OfferingID   string    `json:"offeringId"`   // Unique ID: dept-course-semester-year
+	DepartmentID string    `json:"departmentId"` // Department offering the course
+	CourseCode   string    `json:"courseCode"`   // e.g., "CS301"
+	CourseName   string    `json:"courseName"`   // e.g., "Data Structures"
+	Credits      float64   `json:"credits"`      // 0.5-6 credits
+	Semester     int       `json:"semester"`     // Which semester (1-8)
+	AcademicYear string    `json:"academicYear"` // e.g., "2024-25"
+	IsActive     bool      `json:"isActive"`     // Whether course is currently offered
+	CreatedBy    string    `json:"createdBy"`
+	CreatedAt    time.Time `json:"createdAt"`
+	ModifiedBy   string    `json:"modifiedBy"`
+	ModifiedAt   time.Time `json:"modifiedAt"`
+}
+
+// Course represents a single course in student's academic record (Enhanced with validation)
 type Course struct {
 	CourseCode string  `json:"courseCode"`
 	CourseName string  `json:"courseName"`
-	Credits    float64 `json:"credits"` // 0.5-6 credits
-	Grade      string  `json:"grade"`   // S, A, B, C, D, P, U, R
-	FacultyID  string  `json:"facultyId"`
+	Credits    float64 `json:"credits"`    // 0.5-6 credits
+	Grade      string  `json:"grade"`      // S, A, B, C, D, P, U, R
+	Department string  `json:"department"` // Changed from FacultyID to Department
 }
 
 // AcademicRecord represents semester academic records (Enhanced)
@@ -56,8 +97,8 @@ type AcademicRecord struct {
 	SGPA          float64   `json:"sgpa"`
 	CGPA          float64   `json:"cgpa"`
 	Timestamp     time.Time `json:"timestamp"`
-	SubmittedBy   string    `json:"submittedBy"`   // Faculty who submitted
-	ApprovedBy    string    `json:"approvedBy"`    // Dean/Registrar who approved
+	SubmittedBy   string    `json:"submittedBy"`   // Department who submitted
+	ApprovedBy    string    `json:"approvedBy"`    // Admin who approved
 	Status        string    `json:"status"`        // DRAFT, SUBMITTED, APPROVED
 	RejectionNote string    `json:"rejectionNote"` // If sent back for corrections
 }
@@ -77,15 +118,18 @@ type Certificate struct {
 	RevokedBy        string    `json:"revokedBy"`
 	RevokedAt        time.Time `json:"revokedAt"`
 	RevocationReason string    `json:"revocationReason"`
+	DegreeAwarded    string    `json:"degreeAwarded"` // Degree name (e.g., "B.Tech in Computer Science")
+	FinalCGPA        float64   `json:"finalCGPA"`     // Final CGPA at graduation
+	IsValid          bool      `json:"isValid"`       // Computed: !Revoked && (ExpiryDate.IsZero() || ExpiryDate > now)
 }
 
 // Constants for validation
 const (
 	// Valid student statuses
 	StatusActive              = "ACTIVE"
-	StatusGraduated          = "GRADUATED"
-	StatusWithdrawn          = "WITHDRAWN"
-	StatusCancelled          = "CANCELLED"
+	StatusGraduated           = "GRADUATED"
+	StatusWithdrawn           = "WITHDRAWN"
+	StatusCancelled           = "CANCELLED"
 	StatusTemporaryWithdrawal = "TEMPORARY_WITHDRAWAL"
 
 	// Valid record statuses
@@ -118,13 +162,27 @@ const (
 	VerifiersMSP   = "VerifiersMSP"
 
 	// Certificate types
-	CertDegree        = "DEGREE"
-	CertTranscript    = "TRANSCRIPT"
-	CertProvisional   = "PROVISIONAL"
-	CertBonafide      = "BONAFIDE"
-	CertMigration     = "MIGRATION"
-	CertCharacter     = "CHARACTER"
-	CertStudyConduct  = "STUDY_CONDUCT"
+	CertDegree       = "DEGREE"
+	CertTranscript   = "TRANSCRIPT"
+	CertProvisional  = "PROVISIONAL"
+	CertBonafide     = "BONAFIDE"
+	CertMigration    = "MIGRATION"
+	CertCharacter    = "CHARACTER"
+	CertStudyConduct = "STUDY_CONDUCT"
+
+	// Composite key prefixes
+	StudentAllKey     = "student~all"
+	StudentDeptKey    = "student~dept"
+	StudentYearKey    = "student~year"
+	StudentStatusKey  = "student~status"
+	StudentRecordKey  = "student~record"
+	RecordSemesterKey = "record~semester"
+	RecordStatusKey   = "record~status"
+	RecordDeptKey     = "record~department"
+	CertStudentKey    = "cert~student"
+	DepartmentAllKey  = "department~all"
+	CourseOfferingKey = "course~offering"
+	CourseDeptKey     = "course~dept"
 )
 
 // Validation helper functions
@@ -190,6 +248,21 @@ func validateCertificateType(certType string) error {
 	return fmt.Errorf("invalid certificate type '%s'", certType)
 }
 
+// checkClientAttribute verifies if the client has a specific attribute with the expected value
+func checkClientAttribute(ctx contractapi.TransactionContextInterface, attributeName, expectedValue string) error {
+	val, found, err := ctx.GetClientIdentity().GetAttributeValue(attributeName)
+	if err != nil {
+		return fmt.Errorf("failed to get client attribute '%s': %w", attributeName, err)
+	}
+	if !found {
+		return fmt.Errorf("client attribute '%s' not found", attributeName)
+	}
+	if val != expectedValue {
+		return fmt.Errorf("unauthorized: client attribute '%s' is '%s', but expected '%s'", attributeName, val, expectedValue)
+	}
+	return nil
+}
+
 // Access control helper functions
 
 // checkMSPAccess verifies if caller is from allowed organization
@@ -219,15 +292,11 @@ func checkDepartmentAccess(ctx contractapi.TransactionContextInterface, departme
 		return nil
 	}
 
-	// DepartmentsMSP can only access their own department
+	// DepartmentsMSP can only access their own department via an attribute
 	if clientMSPID == DepartmentsMSP {
-		// Get department from client certificate attribute
-		dept, found, err := ctx.GetClientIdentity().GetAttributeValue("department")
-		if err != nil || !found {
-			return fmt.Errorf("department attribute not found in client certificate")
-		}
-		if dept != department {
-			return fmt.Errorf("unauthorized: cannot access records from department %s", department)
+		err := checkClientAttribute(ctx, "department", department)
+		if err != nil {
+			return fmt.Errorf("department access check failed: %w", err)
 		}
 		return nil
 	}
@@ -238,24 +307,46 @@ func checkDepartmentAccess(ctx contractapi.TransactionContextInterface, departme
 // InitLedger initializes the ledger with sample data
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	fmt.Println("Initializing NIT Warangal Academic Records Blockchain - Production Version")
-	
+
 	// Emit initialization event
 	err := ctx.GetStub().SetEvent("LedgerInitialized", []byte(time.Now().String()))
 	if err != nil {
 		return fmt.Errorf("failed to set event: %v", err)
 	}
-	
+
 	return nil
 }
 
-// CreateStudent creates a new student record (Enhanced with validation and RBAC)
+// CreateStudent creates a new student record, storing sensitive data in a private collection
 func (s *SmartContract) CreateStudent(ctx contractapi.TransactionContextInterface,
-	rollNumber, name, department string, enrollmentYear int, email, aadhaarHash, admissionCategory string) error {
+	rollNumber, name, department string, enrollmentYear int, email, admissionCategory string) error {
 
 	// Access Control: Only NITWarangalMSP can create students
 	err := checkMSPAccess(ctx, NITWarangalMSP)
 	if err != nil {
 		return err
+	}
+
+	// Normalize department to uppercase
+	department = strings.ToUpper(department)
+
+	// Get private data from transient map
+	transientMap, err := ctx.GetStub().GetTransient()
+	if err != nil {
+		return fmt.Errorf("failed to get transient map: %w", err)
+	}
+
+	aadhaarHash, ok := transientMap["aadhaarHash"]
+	if !ok {
+		return fmt.Errorf("aadhaarHash must be provided in transient data")
+	}
+	phone, ok := transientMap["phone"]
+	if !ok {
+		return fmt.Errorf("phone must be provided in transient data")
+	}
+	personalEmail, ok := transientMap["personalEmail"]
+	if !ok {
+		return fmt.Errorf("personalEmail must be provided in transient data")
 	}
 
 	// Validate email
@@ -299,67 +390,92 @@ func (s *SmartContract) CreateStudent(ctx contractapi.TransactionContextInterfac
 	// Get creator ID
 	clientID, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
-		return fmt.Errorf("failed to get client identity: %v", err)
+		return fmt.Errorf("failed to get client ID: %w", err)
 	}
 
 	student := Student{
-		StudentID:        rollNumber, // Using rollNumber as studentID
-		Name:             name,
-		Department:       department,
-		EnrollmentYear:   enrollmentYear,
-		RollNumber:       rollNumber,
-		Email:            email,
-		Phone:            "", // Empty initially, can be updated later
-		PersonalEmail:    "", // Empty initially, can be updated later
-		AadhaarHash:      aadhaarHash,
-		AdmissionCategory: admissionCategory,
-		Status:           StatusActive,
-		CreatedBy:        clientID,
-		CreatedAt:        timestamp,
-		ModifiedBy:       clientID,
-		ModifiedAt:       timestamp,
+		StudentID:          rollNumber, // Using rollNumber as studentID
+		Name:               name,
+		Department:         department,
+		EnrollmentYear:     enrollmentYear,
+		RollNumber:         rollNumber,
+		Email:              email,
+		AdmissionCategory:  admissionCategory,
+		Status:             StatusActive,
+		TotalCreditsEarned: 0,
+		CurrentCGPA:        0,
+		CreatedBy:          clientID,
+		CreatedAt:          timestamp,
+		ModifiedBy:         clientID,
+		ModifiedAt:         timestamp,
 	}
 
 	studentJSON, err := json.Marshal(student)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal student: %w", err)
 	}
 
-	// Store with primary key (rollNumber)
+	// Store public data
 	err = ctx.GetStub().PutState(rollNumber, studentJSON)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put public student data: %w", err)
+	}
+
+	// Store private data
+	privateDetails := StudentPrivateDetails{
+		StudentID:     rollNumber,
+		AadhaarHash:   string(aadhaarHash),
+		Phone:         string(phone),
+		PersonalEmail: string(personalEmail),
+	}
+	privateDetailsJSON, err := json.Marshal(privateDetails)
+	if err != nil {
+		return fmt.Errorf("failed to marshal private details: %w", err)
+	}
+	err = ctx.GetStub().PutPrivateData(studentPrivateCollection, rollNumber, privateDetailsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put private student data: %w", err)
 	}
 
 	// Create composite keys for efficient querying
 	// 1. student~department~rollNumber (for department-wise queries)
-	deptKey, err := ctx.GetStub().CreateCompositeKey("student~dept", []string{department, rollNumber})
+	deptKey, err := ctx.GetStub().CreateCompositeKey(StudentDeptKey, []string{department, rollNumber})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for department: %w", err)
 	}
 	err = ctx.GetStub().PutState(deptKey, studentJSON)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for department key: %w", err)
 	}
 
 	// 2. student~year~rollNumber (for year-wise queries)
-	yearKey, err := ctx.GetStub().CreateCompositeKey("student~year", []string{fmt.Sprintf("%d", enrollmentYear), rollNumber})
+	yearKey, err := ctx.GetStub().CreateCompositeKey(StudentYearKey, []string{fmt.Sprintf("%d", enrollmentYear), rollNumber})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for year: %w", err)
 	}
 	err = ctx.GetStub().PutState(yearKey, studentJSON)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for year key: %w", err)
 	}
 
 	// 3. student~status~rollNumber (for status-wise queries)
-	statusKey, err := ctx.GetStub().CreateCompositeKey("student~status", []string{StatusActive, rollNumber})
+	statusKey, err := ctx.GetStub().CreateCompositeKey(StudentStatusKey, []string{StatusActive, rollNumber})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for status: %w", err)
 	}
 	err = ctx.GetStub().PutState(statusKey, studentJSON)
 	if err != nil {
 		return err
+	}
+
+	// 4. student~all~rollNumber (for GetAllStudents query)
+	allKey, err := ctx.GetStub().CreateCompositeKey(StudentAllKey, []string{rollNumber})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key for all students: %w", err)
+	}
+	err = ctx.GetStub().PutState(allKey, []byte{0x00}) // Use a null byte as value
+	if err != nil {
+		return fmt.Errorf("failed to put state for all students key: %w", err)
 	}
 
 	// Emit student created event
@@ -378,6 +494,31 @@ func (s *SmartContract) CreateStudent(ctx contractapi.TransactionContextInterfac
 	}
 
 	return nil
+}
+
+// GetStudentPrivateDetails retrieves the private details of a student
+func (s *SmartContract) GetStudentPrivateDetails(ctx contractapi.TransactionContextInterface, rollNumber string) (*StudentPrivateDetails, error) {
+	// Access Control: Only NITWarangalMSP can get private details
+	err := checkMSPAccess(ctx, NITWarangalMSP)
+	if err != nil {
+		return nil, err
+	}
+
+	privateDetailsJSON, err := ctx.GetStub().GetPrivateData(studentPrivateCollection, rollNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private details for student %s: %w", rollNumber, err)
+	}
+	if privateDetailsJSON == nil {
+		return nil, fmt.Errorf("private details for student %s do not exist", rollNumber)
+	}
+
+	var privateDetails StudentPrivateDetails
+	err = json.Unmarshal(privateDetailsJSON, &privateDetails)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal private details: %w", err)
+	}
+
+	return &privateDetails, nil
 }
 
 // GetStudent retrieves a student record (Enhanced with department-level access control)
@@ -463,13 +604,13 @@ func (s *SmartContract) UpdateStudentStatus(ctx contractapi.TransactionContextIn
 
 	// Update status composite key
 	// Remove old status key
-	oldStatusKey, err := ctx.GetStub().CreateCompositeKey("student~status", []string{oldStatus, rollNumber})
+	oldStatusKey, err := ctx.GetStub().CreateCompositeKey(StudentStatusKey, []string{oldStatus, rollNumber})
 	if err == nil {
 		ctx.GetStub().DelState(oldStatusKey)
 	}
 
 	// Add new status key
-	newStatusKey, err := ctx.GetStub().CreateCompositeKey("student~status", []string{newStatus, rollNumber})
+	newStatusKey, err := ctx.GetStub().CreateCompositeKey(StudentStatusKey, []string{newStatus, rollNumber})
 	if err != nil {
 		return err
 	}
@@ -496,9 +637,8 @@ func (s *SmartContract) UpdateStudentStatus(ctx contractapi.TransactionContextIn
 	return nil
 }
 
-// UpdateStudentContactInfo updates modifiable contact information
-func (s *SmartContract) UpdateStudentContactInfo(ctx contractapi.TransactionContextInterface,
-	rollNumber, phone, personalEmail string) error {
+// UpdateStudentContactInfo updates modifiable contact information in the private data collection
+func (s *SmartContract) UpdateStudentContactInfo(ctx contractapi.TransactionContextInterface, rollNumber string) error {
 
 	// Access Control: Only NITWarangalMSP can update
 	err := checkMSPAccess(ctx, NITWarangalMSP)
@@ -506,50 +646,180 @@ func (s *SmartContract) UpdateStudentContactInfo(ctx contractapi.TransactionCont
 		return err
 	}
 
+	// Check if student exists
 	student, err := s.GetStudent(ctx, rollNumber)
 	if err != nil {
 		return err
 	}
 
-	// Get transaction timestamp
+	// Get private data from transient map
+	transientMap, err := ctx.GetStub().GetTransient()
+	if err != nil {
+		return fmt.Errorf("failed to get transient map: %w", err)
+	}
+
+	// Fetch existing private details
+	privateDetails, err := s.GetStudentPrivateDetails(ctx, rollNumber)
+	if err != nil {
+		return err
+	}
+
+	// Update fields if new values are provided in transient data
+	if phone, ok := transientMap["phone"]; ok {
+		privateDetails.Phone = string(phone)
+	}
+	if personalEmail, ok := transientMap["personalEmail"]; ok {
+		privateDetails.PersonalEmail = string(personalEmail)
+	}
+
+	// Get modifier ID and timestamp
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client ID: %w", err)
+	}
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get transaction timestamp: %w", err)
+	}
+	timestamp := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	// Update public student record's modification timestamp
+	student.ModifiedBy = clientID
+	student.ModifiedAt = timestamp
+	studentJSON, err := json.Marshal(student)
+	if err != nil {
+		return fmt.Errorf("failed to marshal student for modification tracking: %w", err)
+	}
+	err = ctx.GetStub().PutState(rollNumber, studentJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update student modification timestamp: %w", err)
+	}
+
+	// Save updated private details
+	privateDetailsJSON, err := json.Marshal(privateDetails)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated private details: %w", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(studentPrivateCollection, rollNumber, privateDetailsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put updated private details: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateStudentDepartment updates a student's department with proper composite key cleanup
+func (s *SmartContract) UpdateStudentDepartment(ctx contractapi.TransactionContextInterface, rollNumber, newDepartment string) error {
+	// Access Control: Only NITWarangalMSP can update department
+	err := checkMSPAccess(ctx, NITWarangalMSP)
+	if err != nil {
+		return err
+	}
+
+	// Get existing student record directly without access control checks
+	studentJSON, err := ctx.GetStub().GetState(rollNumber)
+	if err != nil {
+		return fmt.Errorf("failed to read student: %v", err)
+	}
+	if studentJSON == nil {
+		return fmt.Errorf("student %s does not exist", rollNumber)
+	}
+
+	var student Student
+	err = json.Unmarshal(studentJSON, &student)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal student: %v", err)
+	}
+
+	oldDepartment := student.Department
+
+	// If department hasn't changed, no need to proceed
+	if oldDepartment == newDepartment {
+		return fmt.Errorf("student is already in department %s", newDepartment)
+	}
+
+	// Get transaction timestamp and client ID
 	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
 	if err != nil {
 		return fmt.Errorf("failed to get transaction timestamp: %v", err)
 	}
 	timestamp := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
 
-	// Get modifier ID
 	clientID, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
 		return fmt.Errorf("failed to get client identity: %v", err)
 	}
 
-	// Update only modifiable fields
-	if phone != "" {
-		student.Phone = phone
-	}
-	if personalEmail != "" {
-		student.PersonalEmail = personalEmail
-	}
+	// Update student record
+	student.Department = newDepartment
 	student.ModifiedBy = clientID
 	student.ModifiedAt = timestamp
 
-	studentJSON, err := json.Marshal(student)
+	updatedStudentJSON, err := json.Marshal(student)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal student: %w", err)
 	}
 
-	return ctx.GetStub().PutState(rollNumber, studentJSON)
+	// Update main record
+	err = ctx.GetStub().PutState(rollNumber, updatedStudentJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update student record: %w", err)
+	}
+
+	// Update composite keys
+	// 1. Remove old department composite key
+	oldDeptKey, err := ctx.GetStub().CreateCompositeKey(StudentDeptKey, []string{oldDepartment, rollNumber})
+	if err == nil {
+		err = ctx.GetStub().DelState(oldDeptKey)
+		if err != nil {
+			return fmt.Errorf("failed to delete old department key: %w", err)
+		}
+	}
+
+	// 2. Add new department composite key
+	newDeptKey, err := ctx.GetStub().CreateCompositeKey(StudentDeptKey, []string{newDepartment, rollNumber})
+	if err != nil {
+		return fmt.Errorf("failed to create new department key: %w", err)
+	}
+	err = ctx.GetStub().PutState(newDeptKey, updatedStudentJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put new department key: %w", err)
+	}
+
+	// Emit department change event
+	eventPayload := map[string]interface{}{
+		"rollNumber":    rollNumber,
+		"oldDepartment": oldDepartment,
+		"newDepartment": newDepartment,
+		"modifiedBy":    clientID,
+		"modifiedAt":    timestamp,
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	err = ctx.GetStub().SetEvent("StudentDepartmentChanged", eventJSON)
+	if err != nil {
+		return fmt.Errorf("failed to set event: %v", err)
+	}
+
+	return nil
 }
 
 // StudentExists checks if a student exists
 func (s *SmartContract) StudentExists(ctx contractapi.TransactionContextInterface, studentID string) (bool, error) {
 	studentJSON, err := ctx.GetStub().GetState(studentID)
 	if err != nil {
-		return false, fmt.Errorf("failed to read from world state: %v", err)
+		return false, fmt.Errorf("failed to read from world state: %w", err)
 	}
-
 	return studentJSON != nil, nil
+}
+
+// recordExists checks if an academic record exists.
+func (s *SmartContract) recordExists(ctx contractapi.TransactionContextInterface, recordID string) (bool, error) {
+	recordJSON, err := ctx.GetStub().GetState(recordID)
+	if err != nil {
+		return false, fmt.Errorf("failed to read from world state: %w", err)
+	}
+	return recordJSON != nil, nil
 }
 
 // CreateAcademicRecord creates a new academic record (Enhanced with validation and access control)
@@ -557,30 +827,33 @@ func (s *SmartContract) CreateAcademicRecord(ctx contractapi.TransactionContextI
 	recordID, rollNumber string, semester int, year string, department string, coursesJSON string) error {
 
 	// Access Control: Only DepartmentsMSP or NITWarangalMSP can create records
-	mspID, err := ctx.GetClientIdentity().GetMSPID()
+	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
 	if err != nil {
-		return fmt.Errorf("failed to get MSP ID: %v", err)
+		return fmt.Errorf("failed to get client MSP ID: %w", err)
 	}
-	
-	if mspID != NITWarangalMSP {
-		// Department users can only create records for their department
-		err = checkDepartmentAccess(ctx, department)
+	if clientMSPID != DepartmentsMSP && clientMSPID != NITWarangalMSP {
+		return fmt.Errorf("unauthorized: only %s or %s can create academic records", DepartmentsMSP, NITWarangalMSP)
+	}
+
+	// If created by a department, verify the department attribute matches the record's department
+	if clientMSPID == DepartmentsMSP {
+		err := checkClientAttribute(ctx, "department", department)
 		if err != nil {
-			return fmt.Errorf("access denied: %v", err)
+			return fmt.Errorf("department user cannot create a record for another department: %w", err)
 		}
 	}
 
 	// Check if record already exists
-	recordJSON, err := ctx.GetStub().GetState(recordID)
+	exists, err := s.recordExists(ctx, recordID)
 	if err != nil {
-		return fmt.Errorf("failed to read record: %v", err)
+		return err
 	}
-	if recordJSON != nil {
+	if exists {
 		return fmt.Errorf("academic record %s already exists", recordID)
 	}
 
 	// Verify student exists
-	exists, err := s.StudentExists(ctx, rollNumber)
+	exists, err = s.StudentExists(ctx, rollNumber)
 	if err != nil {
 		return err
 	}
@@ -679,49 +952,43 @@ func (s *SmartContract) CreateAcademicRecord(ctx contractapi.TransactionContextI
 
 	// Create composite keys for efficient querying
 	// 1. student~record
-	studentRecordKey, err := ctx.GetStub().CreateCompositeKey("student~record", []string{rollNumber, recordID})
+	recordKey, err := ctx.GetStub().CreateCompositeKey(StudentRecordKey, []string{rollNumber, recordID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for student record: %w", err)
 	}
-	err = ctx.GetStub().PutState(studentRecordKey, []byte{0x00})
+	err = ctx.GetStub().PutState(recordKey, []byte{0x00}) // Use a null byte as value
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for student record key: %w", err)
 	}
 
 	// 2. record~semester~{Semester}~{StudentID}~{RecordID}
-	recordSemesterKey, err := ctx.GetStub().CreateCompositeKey("record~semester", []string{
-		fmt.Sprintf("%d", semester), rollNumber, recordID,
-	})
+	semKey, err := ctx.GetStub().CreateCompositeKey(RecordSemesterKey, []string{fmt.Sprintf("%d", semester), rollNumber, recordID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for semester record: %w", err)
 	}
-	err = ctx.GetStub().PutState(recordSemesterKey, []byte{0x00})
+	err = ctx.GetStub().PutState(semKey, []byte{0x00}) // Use a null byte as value
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for semester record key: %w", err)
 	}
 
 	// 3. record~status~{Status}~{StudentID}~{RecordID}
-	recordStatusKey, err := ctx.GetStub().CreateCompositeKey("record~status", []string{
-		record.Status, rollNumber, recordID,
-	})
+	statusKey, err := ctx.GetStub().CreateCompositeKey(RecordStatusKey, []string{StatusDraft, rollNumber, recordID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for status record: %w", err)
 	}
-	err = ctx.GetStub().PutState(recordStatusKey, []byte{0x00})
+	err = ctx.GetStub().PutState(statusKey, []byte{0x00}) // Use a null byte as value
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for status record key: %w", err)
 	}
 
 	// 4. record~department
-	recordDeptKey, err := ctx.GetStub().CreateCompositeKey("record~department", []string{
-		department, recordID,
-	})
+	deptKey, err := ctx.GetStub().CreateCompositeKey(RecordDeptKey, []string{department, rollNumber, recordID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for department record: %w", err)
 	}
-	err = ctx.GetStub().PutState(recordDeptKey, []byte{0x00})
+	err = ctx.GetStub().PutState(deptKey, []byte{0x00}) // Use a null byte as value
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put state for department record key: %w", err)
 	}
 
 	// Emit event
@@ -771,25 +1038,22 @@ func (s *SmartContract) GetAcademicRecord(ctx contractapi.TransactionContextInte
 
 // ApproveAcademicRecord approves an academic record and calculates CGPA (Enhanced with RBAC and workflow)
 func (s *SmartContract) ApproveAcademicRecord(ctx contractapi.TransactionContextInterface, recordID string) error {
-	// Access Control: Only NITWarangalMSP (Dean/Registrar) can approve records
-	mspID, err := ctx.GetClientIdentity().GetMSPID()
+	// Access Control: Only NITWarangalMSP (Admin) can approve records
+	err := checkMSPAccess(ctx, NITWarangalMSP)
 	if err != nil {
-		return fmt.Errorf("failed to get MSP ID: %v", err)
-	}
-	if mspID != NITWarangalMSP {
-		return fmt.Errorf("access denied: only NITWarangalMSP can approve academic records")
+		return err
 	}
 
-	recordJSON, err := ctx.GetStub().GetState(recordID)
-	if err != nil {
-		return fmt.Errorf("failed to read record: %v", err)
-	}
-	if recordJSON == nil {
-		return fmt.Errorf("record %s does not exist", recordID)
+	// Attribute Check: Check for 'role' of 'admin' (optional - MSP check is sufficient)
+	roleErr := checkClientAttribute(ctx, "role", "admin")
+	if roleErr != nil {
+		// If no role attribute, proceed anyway since MSP check passed
+		// This allows admin identity from wallet without explicit role attribute
+		fmt.Printf("Note: Client approved without role attribute (MSP authorization sufficient)\n")
 	}
 
-	var record AcademicRecord
-	err = json.Unmarshal(recordJSON, &record)
+	// Get record
+	record, err := s.GetAcademicRecord(ctx, recordID)
 	if err != nil {
 		return err
 	}
@@ -804,65 +1068,91 @@ func (s *SmartContract) ApproveAcademicRecord(ctx contractapi.TransactionContext
 		return fmt.Errorf("cannot approve record with status %s", record.Status)
 	}
 
-	clientID, err := ctx.GetClientIdentity().GetID()
-	if err != nil {
-		return fmt.Errorf("failed to get client identity: %v", err)
-	}
-
 	// Calculate CGPA based on all approved records for this student
-	cgpa, err := s.calculateCGPA(ctx, record.StudentID, record.Semester)
+	// Include the current record being approved in the calculation
+	newCGPA, totalCredits, err := s.calculateCGPAIncludingCurrent(ctx, record.StudentID, record.Semester, record.SGPA, record.TotalCredits)
 	if err != nil {
-		return fmt.Errorf("failed to calculate CGPA: %v", err)
+		return fmt.Errorf("failed to calculate CGPA: %w", err)
+	}
+	record.CGPA = newCGPA
+
+	// Update student's overall CGPA and total credits
+	student, err := s.GetStudent(ctx, record.StudentID)
+	if err != nil {
+		return fmt.Errorf("failed to get student for CGPA update: %w", err)
+	}
+	student.CurrentCGPA = newCGPA
+	student.TotalCreditsEarned = totalCredits
+	studentJSON, err := json.Marshal(student)
+	if err != nil {
+		return fmt.Errorf("failed to marshal student for CGPA update: %w", err)
+	}
+	err = ctx.GetStub().PutState(student.RollNumber, studentJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update student with new CGPA: %w", err)
 	}
 
-	// Update composite keys if status changed from non-APPROVED to APPROVED
-	if record.Status != RecordApproved {
-		// Remove old status composite key
-		oldStatusKey, err := ctx.GetStub().CreateCompositeKey("record~status~student", []string{
-			record.Status, record.StudentID, recordID,
-		})
-		if err == nil {
-			ctx.GetStub().DelState(oldStatusKey)
+	// Get approver identity
+	approverID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get approver ID: %w", err)
+	}
+
+	// Get transaction timestamp
+	txTimestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return fmt.Errorf("failed to get transaction timestamp: %w", err)
+	}
+	timestamp := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	// Update composite keys if status changed
+	oldStatus := record.Status
+	if oldStatus != RecordApproved {
+		// Remove old status key
+		oldStatusKey, err := ctx.GetStub().CreateCompositeKey(RecordStatusKey, []string{oldStatus, record.StudentID, recordID})
+		if err != nil {
+			return fmt.Errorf("failed to create old status composite key for deletion: %w", err)
+		}
+		err = ctx.GetStub().DelState(oldStatusKey)
+		if err != nil {
+			return fmt.Errorf("failed to delete old status composite key: %w", err)
 		}
 
-		// Add new status composite key
-		newStatusKey, err := ctx.GetStub().CreateCompositeKey("record~status~student", []string{
-			RecordApproved, record.StudentID, recordID,
-		})
+		// Add new status key
+		newStatusKey, err := ctx.GetStub().CreateCompositeKey(RecordStatusKey, []string{RecordApproved, record.StudentID, recordID})
 		if err != nil {
-			return fmt.Errorf("failed to create new status composite key: %v", err)
+			return fmt.Errorf("failed to create new status composite key: %w", err)
 		}
 		err = ctx.GetStub().PutState(newStatusKey, []byte{0x00})
 		if err != nil {
-			return fmt.Errorf("failed to save new status composite key: %v", err)
+			return fmt.Errorf("failed to put new status composite key: %w", err)
 		}
 	}
 
 	// Update record
-	record.CGPA = cgpa
 	record.Status = RecordApproved
-	record.ApprovedBy = clientID
+	record.ApprovedBy = approverID
+	record.Timestamp = timestamp // Update timestamp to approval time
 
-	updatedJSON, err := json.Marshal(record)
+	recordJSON, err := json.Marshal(record)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal approved record: %w", err)
 	}
 
-	err = ctx.GetStub().PutState(recordID, updatedJSON)
+	err = ctx.GetStub().PutState(recordID, recordJSON)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to put approved record state: %w", err)
 	}
 
 	// Emit event
-	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
 	eventPayload := map[string]interface{}{
 		"recordID":   recordID,
 		"studentID":  record.StudentID,
 		"semester":   record.Semester,
 		"department": record.Department,
 		"sgpa":       record.SGPA,
-		"cgpa":       cgpa,
-		"approvedBy": clientID,
+		"cgpa":       newCGPA,
+		"approvedBy": approverID,
 		"timestamp":  time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos)).Format("2006-01-02T15:04:05Z07:00"),
 	}
 	eventJSON, _ := json.Marshal(eventPayload)
@@ -927,6 +1217,24 @@ func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInter
 		expiryDate = issueDate.AddDate(0, 6, 0) // 6 months validity
 	}
 
+	// Get student details to populate degree and CGPA
+	student, err := s.GetStudent(ctx, studentID)
+	if err != nil {
+		return fmt.Errorf("failed to get student details: %v", err)
+	}
+
+	// Calculate degree name based on department
+	degreeAwarded := ""
+	if certType == CertDegree || certType == CertProvisional {
+		degreeAwarded = fmt.Sprintf("B.Tech in %s", student.Department)
+	}
+
+	// Get final CGPA from student record
+	finalCGPA := student.CurrentCGPA
+
+	// Calculate isValid: not revoked and not expired
+	isValid := true // Initial state, will be computed dynamically in GetCertificate
+
 	certificate := Certificate{
 		CertificateID: certificateID,
 		StudentID:     studentID,
@@ -938,6 +1246,9 @@ func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInter
 		IssuedBy:      clientID,
 		Verified:      true,
 		Revoked:       false,
+		DegreeAwarded: degreeAwarded,
+		FinalCGPA:     finalCGPA,
+		IsValid:       isValid,
 	}
 
 	certJSON, err := json.Marshal(certificate)
@@ -951,11 +1262,11 @@ func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInter
 	}
 
 	// Create composite key for student certificates
-	studentCertKey, err := ctx.GetStub().CreateCompositeKey("student~cert", []string{studentID, certificateID})
+	certKey, err := ctx.GetStub().CreateCompositeKey(CertStudentKey, []string{studentID, certificateID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create composite key for certificate: %w", err)
 	}
-	err = ctx.GetStub().PutState(studentCertKey, []byte{0x00})
+	err = ctx.GetStub().PutState(certKey, []byte{0x00})
 	if err != nil {
 		return err
 	}
@@ -995,10 +1306,16 @@ func (s *SmartContract) GetCertificate(ctx contractapi.TransactionContextInterfa
 		return nil, err
 	}
 
+	// Get current time for expiry check
+	txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
+	currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+	// Dynamically compute IsValid: not revoked AND (no expiry OR not expired)
+	certificate.IsValid = !certificate.Revoked &&
+		(certificate.ExpiryDate.IsZero() || currentTime.Before(certificate.ExpiryDate))
+
 	// Check if certificate is expired (for BONAFIDE certificates)
 	if certificate.Type == CertBonafide && !certificate.ExpiryDate.IsZero() {
-		txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
-		currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
 		if currentTime.After(certificate.ExpiryDate) {
 			certificate.Verified = false // Mark as not verified if expired
 		}
@@ -1105,6 +1422,7 @@ func (s *SmartContract) RevokeCertificate(ctx contractapi.TransactionContextInte
 	certificate.RevokedAt = revokedAt
 	certificate.RevocationReason = reason
 	certificate.Verified = false
+	certificate.IsValid = false // Mark as invalid when revoked
 
 	updatedCertJSON, err := json.Marshal(certificate)
 	if err != nil {
@@ -1136,9 +1454,9 @@ func (s *SmartContract) GetCertificatesByStudent(ctx contractapi.TransactionCont
 	studentID string) ([]*Certificate, error) {
 
 	// Use composite key to query certificates by studentID
-	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey("student~cert", []string{studentID})
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(CertStudentKey, []string{studentID})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get certificates by student: %w", err)
 	}
 	defer resultsIterator.Close()
 
@@ -1174,6 +1492,15 @@ func (s *SmartContract) GetCertificatesByStudent(ctx contractapi.TransactionCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal certificate %s: %v", certificateID, err)
 		}
+
+		// Get current time for expiry check
+		txTimestamp, _ := ctx.GetStub().GetTxTimestamp()
+		currentTime := time.Unix(txTimestamp.Seconds, int64(txTimestamp.Nanos))
+
+		// Dynamically compute IsValid: not revoked AND (no expiry OR not expired)
+		certificate.IsValid = !certificate.Revoked &&
+			(certificate.ExpiryDate.IsZero() || currentTime.Before(certificate.ExpiryDate))
+
 		certificates = append(certificates, &certificate)
 	}
 
@@ -1184,9 +1511,9 @@ func (s *SmartContract) GetCertificatesByStudent(ctx contractapi.TransactionCont
 func (s *SmartContract) GetStudentHistory(ctx contractapi.TransactionContextInterface, studentID string) ([]*AcademicRecord, error) {
 	// Use composite key to query records by studentID
 	// Format: student~record~{studentID}~{recordID}
-	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey("student~record", []string{studentID})
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(StudentRecordKey, []string{studentID})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get student history: %w", err)
 	}
 	defer resultsIterator.Close()
 
@@ -1229,12 +1556,20 @@ func (s *SmartContract) GetStudentHistory(ctx contractapi.TransactionContextInte
 	return records, nil
 }
 
-// GetAllStudents retrieves all students
-func (s *SmartContract) GetAllStudents(ctx contractapi.TransactionContextInterface) ([]*Student, error) {
-	// Query all keys in the ledger and filter for Student objects
-	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
+// GetStudentCGPA retrieves the current CGPA for a student
+func (s *SmartContract) GetStudentCGPA(ctx contractapi.TransactionContextInterface, studentID string) (float64, error) {
+	student, err := s.GetStudent(ctx, studentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state by range: %v", err)
+		return 0, fmt.Errorf("failed to get student: %w", err)
+	}
+	return student.CurrentCGPA, nil
+}
+
+// GetAllStudents retrieves all students using a composite key for efficiency
+func (s *SmartContract) GetAllStudents(ctx contractapi.TransactionContextInterface) ([]*Student, error) {
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(StudentAllKey, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all students: %w", err)
 	}
 	defer resultsIterator.Close()
 
@@ -1242,35 +1577,41 @@ func (s *SmartContract) GetAllStudents(ctx contractapi.TransactionContextInterfa
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
 		if err != nil {
-			return nil, fmt.Errorf("failed to iterate results: %v", err)
+			return nil, fmt.Errorf("failed to iterate over students: %w", err)
 		}
 
-		// Skip composite keys (they contain null byte 0x00)
-		if len(queryResponse.Key) == 0 || queryResponse.Key[0] == 0x00 {
-			continue
-		}
-
-		// Try to unmarshal as Student
-		var student Student
-		err = json.Unmarshal(queryResponse.Value, &student)
+		_, compositeKeyParts, err := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
 		if err != nil {
-			// Not a student object, skip
-			continue
+			return nil, fmt.Errorf("failed to split composite key: %w", err)
 		}
+		if len(compositeKeyParts) < 1 {
+			return nil, fmt.Errorf("invalid composite key for student")
+		}
+		rollNumber := compositeKeyParts[0]
 
-		// Verify it's actually a Student by checking required fields
-		if student.RollNumber != "" && student.Department != "" {
-			students = append(students, &student)
+		student, err := s.GetStudent(ctx, rollNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get student %s: %w", rollNumber, err)
 		}
+		students = append(students, student)
 	}
 
 	return students, nil
 }
 
+// DEPRECATED: Use GetStudentsByDepartment instead
+// GetStudentsByFaculty retrieves all students in the same department as the faculty
+// For faculty to view students in their department
+// This function is kept for backward compatibility but should not be used
+func (s *SmartContract) GetStudentsByFaculty(ctx contractapi.TransactionContextInterface, facultyID string, facultyDepartment string) ([]*Student, error) {
+	// Redirect to GetStudentsByDepartment
+	return s.GetStudentsByDepartment(ctx, facultyDepartment)
+}
+
 // Helper function to calculate grades (Enhanced with custom NIT Warangal grade system)
 func calculateGrades(courses []Course) (float64, float64) {
+	totalPoints := 0.0
 	totalCredits := 0.0
-	totalGradePoints := 0.0
 
 	// Custom NIT Warangal grade point mapping (10-point scale)
 	gradePoints := map[string]float64{
@@ -1287,42 +1628,108 @@ func calculateGrades(courses []Course) (float64, float64) {
 	for _, course := range courses {
 		totalCredits += course.Credits
 		if gp, ok := gradePoints[course.Grade]; ok {
-			totalGradePoints += gp * course.Credits
+			totalPoints += gp * course.Credits
 		}
 	}
 
 	sgpa := 0.0
 	if totalCredits > 0 {
-		sgpa = totalGradePoints / totalCredits
+		sgpa = totalPoints / totalCredits
 	}
 
 	return totalCredits, sgpa
 }
 
 // Calculate CGPA based on all approved records (Enhanced)
-func (s *SmartContract) calculateCGPA(ctx contractapi.TransactionContextInterface, studentID string, currentSemester int) (float64, error) {
-	records, err := s.GetStudentHistory(ctx, studentID)
+func (s *SmartContract) calculateCGPA(ctx contractapi.TransactionContextInterface, studentID string, currentSemester int) (float64, float64, error) {
+	// Get all approved academic records for the student
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(RecordStatusKey, []string{RecordApproved, studentID})
 	if err != nil {
-		return 0, err
+		return 0, 0, fmt.Errorf("failed to query approved records: %w", err)
 	}
+	defer resultsIterator.Close()
 
+	totalPoints := 0.0
 	totalCredits := 0.0
-	totalGradePoints := 0.0
 
-	for _, record := range records {
-		// Only include approved records up to current semester
-		if record.Status == RecordApproved && record.Semester <= currentSemester {
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to iterate approved records: %w", err)
+		}
+
+		_, keyParts, err := ctx.GetStub().SplitCompositeKey(response.Key)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to split composite key for record: %w", err)
+		}
+		recordID := keyParts[len(keyParts)-1]
+
+		record, err := s.GetAcademicRecord(ctx, recordID)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to get academic record %s: %w", recordID, err)
+		}
+
+		// Ensure we only include semesters up to the current one
+		if record.Semester <= currentSemester {
+			totalPoints += record.SGPA * record.TotalCredits
 			totalCredits += record.TotalCredits
-			totalGradePoints += record.SGPA * record.TotalCredits
 		}
 	}
 
-	cgpa := 0.0
-	if totalCredits > 0 {
-		cgpa = totalGradePoints / totalCredits
+	if totalCredits == 0 {
+		return 0, 0, nil // Avoid division by zero
 	}
 
-	return cgpa, nil
+	cgpa := totalPoints / totalCredits
+	return cgpa, totalCredits, nil
+}
+
+// calculateCGPAIncludingCurrent calculates CGPA including the current record being approved
+func (s *SmartContract) calculateCGPAIncludingCurrent(ctx contractapi.TransactionContextInterface, studentID string, currentSemester int, currentSGPA float64, currentCredits float64) (float64, float64, error) {
+	// Get all approved academic records for the student (excluding current semester)
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(RecordStatusKey, []string{RecordApproved, studentID})
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query approved records: %w", err)
+	}
+	defer resultsIterator.Close()
+
+	totalPoints := 0.0
+	totalCredits := 0.0
+
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to iterate approved records: %w", err)
+		}
+
+		_, keyParts, err := ctx.GetStub().SplitCompositeKey(response.Key)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to split composite key for record: %w", err)
+		}
+		recordID := keyParts[len(keyParts)-1]
+
+		record, err := s.GetAcademicRecord(ctx, recordID)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to get academic record %s: %w", recordID, err)
+		}
+
+		// Only include semesters before the current one (avoid double-counting)
+		if record.Semester < currentSemester {
+			totalPoints += record.SGPA * record.TotalCredits
+			totalCredits += record.TotalCredits
+		}
+	}
+
+	// Add current semester's data
+	totalPoints += currentSGPA * currentCredits
+	totalCredits += currentCredits
+
+	if totalCredits == 0 {
+		return 0, 0, nil // Avoid division by zero
+	}
+
+	cgpa := totalPoints / totalCredits
+	return cgpa, totalCredits, nil
 }
 
 // ============================================================================
@@ -1331,10 +1738,10 @@ func (s *SmartContract) calculateCGPA(ctx contractapi.TransactionContextInterfac
 
 // PaginatedQueryResult represents paginated query results
 type PaginatedQueryResult struct {
-	Records      interface{} `json:"records"`
-	Bookmark     string      `json:"bookmark"`
-	RecordCount  int         `json:"recordCount"`
-	HasMore      bool        `json:"hasMore"`
+	Records     interface{} `json:"records"`
+	Bookmark    string      `json:"bookmark"`
+	RecordCount int         `json:"recordCount"`
+	HasMore     bool        `json:"hasMore"`
 }
 
 // QueryStudentsByDepartment returns students in a department with pagination
@@ -1347,24 +1754,19 @@ func (s *SmartContract) QueryStudentsByDepartment(ctx contractapi.TransactionCon
 	// Check department access
 	err := checkDepartmentAccess(ctx, department)
 	if err != nil {
-		return nil, fmt.Errorf("department access denied: %v", err)
+		return nil, err
 	}
 
 	// Query using composite key: student~dept~{Department}~{RollNumber}
-	iterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"student~dept",
-		[]string{department},
-		int32(pageSize),
-		bookmark,
-	)
+	resultsIterator, metadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(StudentDeptKey, []string{department}, int32(pageSize), bookmark)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query students by department: %v", err)
+		return nil, fmt.Errorf("failed to query students by department: %w", err)
 	}
-	defer iterator.Close()
+	defer resultsIterator.Close()
 
 	var students []*Student
-	for iterator.HasNext() {
-		queryResponse, err := iterator.Next()
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
 		if err != nil {
 			return nil, fmt.Errorf("failed to iterate query results: %v", err)
 		}
@@ -1388,7 +1790,7 @@ func (s *SmartContract) QueryStudentsByDepartment(ctx contractapi.TransactionCon
 		var student Student
 		err = json.Unmarshal(studentBytes, &student)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal student: %v", err)
+			return nil, fmt.Errorf("failed to unmarshal student data: %w", err)
 		}
 
 		students = append(students, &student)
@@ -1396,9 +1798,9 @@ func (s *SmartContract) QueryStudentsByDepartment(ctx contractapi.TransactionCon
 
 	result := &PaginatedQueryResult{
 		Records:     students,
-		Bookmark:    responseMetadata.Bookmark,
-		RecordCount: int(responseMetadata.FetchedRecordsCount),
-		HasMore:     responseMetadata.Bookmark != "",
+		Bookmark:    metadata.Bookmark,
+		RecordCount: int(metadata.FetchedRecordsCount),
+		HasMore:     metadata.Bookmark != "",
 	}
 
 	return result, nil
@@ -1417,21 +1819,15 @@ func (s *SmartContract) QueryStudentsByYear(ctx contractapi.TransactionContextIn
 	}
 
 	// Query using composite key: student~year~{EnrollmentYear}~{RollNumber}
-	yearStr := fmt.Sprintf("%d", year)
-	iterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"student~year",
-		[]string{yearStr},
-		int32(pageSize),
-		bookmark,
-	)
+	resultsIterator, metadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(StudentYearKey, []string{fmt.Sprintf("%d", year)}, int32(pageSize), bookmark)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query students by year: %v", err)
+		return nil, fmt.Errorf("failed to query students by year: %w", err)
 	}
-	defer iterator.Close()
+	defer resultsIterator.Close()
 
 	var students []*Student
-	for iterator.HasNext() {
-		queryResponse, err := iterator.Next()
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
 		if err != nil {
 			return nil, fmt.Errorf("failed to iterate query results: %v", err)
 		}
@@ -1455,7 +1851,7 @@ func (s *SmartContract) QueryStudentsByYear(ctx contractapi.TransactionContextIn
 		var student Student
 		err = json.Unmarshal(studentBytes, &student)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal student: %v", err)
+			return nil, fmt.Errorf("failed to unmarshal student data: %w", err)
 		}
 
 		students = append(students, &student)
@@ -1463,9 +1859,9 @@ func (s *SmartContract) QueryStudentsByYear(ctx contractapi.TransactionContextIn
 
 	result := &PaginatedQueryResult{
 		Records:     students,
-		Bookmark:    responseMetadata.Bookmark,
-		RecordCount: int(responseMetadata.FetchedRecordsCount),
-		HasMore:     responseMetadata.Bookmark != "",
+		Bookmark:    metadata.Bookmark,
+		RecordCount: int(metadata.FetchedRecordsCount),
+		HasMore:     metadata.Bookmark != "",
 	}
 
 	return result, nil
@@ -1485,20 +1881,15 @@ func (s *SmartContract) QueryStudentsByStatus(ctx contractapi.TransactionContext
 	}
 
 	// Query using composite key: student~status~{Status}~{RollNumber}
-	iterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"student~status",
-		[]string{status},
-		int32(pageSize),
-		bookmark,
-	)
+	resultsIterator, metadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(StudentStatusKey, []string{status}, int32(pageSize), bookmark)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query students by status: %v", err)
+		return nil, fmt.Errorf("failed to query students by status: %w", err)
 	}
-	defer iterator.Close()
+	defer resultsIterator.Close()
 
 	var students []*Student
-	for iterator.HasNext() {
-		queryResponse, err := iterator.Next()
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
 		if err != nil {
 			return nil, fmt.Errorf("failed to iterate query results: %v", err)
 		}
@@ -1522,7 +1913,7 @@ func (s *SmartContract) QueryStudentsByStatus(ctx contractapi.TransactionContext
 		var student Student
 		err = json.Unmarshal(studentBytes, &student)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal student: %v", err)
+			return nil, fmt.Errorf("failed to unmarshal student data: %w", err)
 		}
 
 		students = append(students, &student)
@@ -1530,9 +1921,9 @@ func (s *SmartContract) QueryStudentsByStatus(ctx contractapi.TransactionContext
 
 	result := &PaginatedQueryResult{
 		Records:     students,
-		Bookmark:    responseMetadata.Bookmark,
-		RecordCount: int(responseMetadata.FetchedRecordsCount),
-		HasMore:     responseMetadata.Bookmark != "",
+		Bookmark:    metadata.Bookmark,
+		RecordCount: int(metadata.FetchedRecordsCount),
+		HasMore:     metadata.Bookmark != "",
 	}
 
 	return result, nil
@@ -1552,21 +1943,15 @@ func (s *SmartContract) QueryRecordsBySemester(ctx contractapi.TransactionContex
 	}
 
 	// Query using composite key: record~semester~{Semester}~{StudentID}~{RecordID}
-	semesterStr := fmt.Sprintf("%d", semester)
-	iterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"record~semester",
-		[]string{semesterStr},
-		int32(pageSize),
-		bookmark,
-	)
+	resultsIterator, metadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(RecordSemesterKey, []string{fmt.Sprintf("%d", semester)}, int32(pageSize), bookmark)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query records by semester: %v", err)
+		return nil, fmt.Errorf("failed to query records by semester: %w", err)
 	}
-	defer iterator.Close()
+	defer resultsIterator.Close()
 
 	var records []*AcademicRecord
-	for iterator.HasNext() {
-		queryResponse, err := iterator.Next()
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
 		if err != nil {
 			return nil, fmt.Errorf("failed to iterate query results: %v", err)
 		}
@@ -1604,9 +1989,9 @@ func (s *SmartContract) QueryRecordsBySemester(ctx contractapi.TransactionContex
 
 	result := &PaginatedQueryResult{
 		Records:     records,
-		Bookmark:    responseMetadata.Bookmark,
-		RecordCount: int(responseMetadata.FetchedRecordsCount),
-		HasMore:     responseMetadata.Bookmark != "",
+		Bookmark:    metadata.Bookmark,
+		RecordCount: int(metadata.FetchedRecordsCount),
+		HasMore:     metadata.Bookmark != "",
 	}
 
 	return result, nil
@@ -1633,20 +2018,15 @@ func (s *SmartContract) QueryRecordsByStatus(ctx contractapi.TransactionContextI
 	}
 
 	// Query using composite key: record~status~{Status}~{StudentID}~{RecordID}
-	iterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"record~status",
-		[]string{status},
-		int32(pageSize),
-		bookmark,
-	)
+	resultsIterator, metadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(RecordStatusKey, []string{status}, int32(pageSize), bookmark)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query records by status: %v", err)
+		return nil, fmt.Errorf("failed to query records by status: %w", err)
 	}
-	defer iterator.Close()
+	defer resultsIterator.Close()
 
 	var records []*AcademicRecord
-	for iterator.HasNext() {
-		queryResponse, err := iterator.Next()
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
 		if err != nil {
 			return nil, fmt.Errorf("failed to iterate query results: %v", err)
 		}
@@ -1684,9 +2064,9 @@ func (s *SmartContract) QueryRecordsByStatus(ctx contractapi.TransactionContextI
 
 	result := &PaginatedQueryResult{
 		Records:     records,
-		Bookmark:    responseMetadata.Bookmark,
-		RecordCount: int(responseMetadata.FetchedRecordsCount),
-		HasMore:     responseMetadata.Bookmark != "",
+		Bookmark:    metadata.Bookmark,
+		RecordCount: int(metadata.FetchedRecordsCount),
+		HasMore:     metadata.Bookmark != "",
 	}
 
 	return result, nil
@@ -1701,10 +2081,10 @@ func (s *SmartContract) QueryPendingRecords(ctx contractapi.TransactionContextIn
 
 	// Query DRAFT records first
 	var allRecords []*AcademicRecord
-	
+
 	// Get DRAFT records
 	draftIterator, _, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"record~status",
+		RecordStatusKey,
 		[]string{StatusDraft},
 		int32(pageSize),
 		bookmark,
@@ -1748,7 +2128,7 @@ func (s *SmartContract) QueryPendingRecords(ctx contractapi.TransactionContextIn
 
 	// Get SUBMITTED records
 	submittedIterator, responseMetadata, err := ctx.GetStub().GetStateByPartialCompositeKeyWithPagination(
-		"record~status",
+		RecordStatusKey,
 		[]string{RecordSubmitted},
 		int32(pageSize),
 		bookmark,
@@ -1798,6 +2178,448 @@ func (s *SmartContract) QueryPendingRecords(ctx contractapi.TransactionContextIn
 	}
 
 	return result, nil
+}
+
+// ==================== Department Management ====================
+
+// CreateDepartment creates a new department
+func (s *SmartContract) CreateDepartment(ctx contractapi.TransactionContextInterface,
+	departmentID, departmentName, hod, email, phone string) error {
+
+	// Access Control: Only admin can create departments
+	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	if clientMSPID != NITWarangalMSP {
+		return fmt.Errorf("unauthorized: only admin can create departments")
+	}
+
+	// Normalize department ID to uppercase
+	departmentID = strings.ToUpper(departmentID)
+
+	// Check if department already exists
+	exists, err := s.departmentExists(ctx, departmentID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("department %s already exists", departmentID)
+	}
+
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client ID: %v", err)
+	}
+
+	department := Department{
+		DepartmentID:   departmentID,
+		DepartmentName: departmentName,
+		HOD:            hod,
+		Email:          email,
+		Phone:          phone,
+		CreatedBy:      clientID,
+		CreatedAt:      time.Now(),
+		ModifiedBy:     clientID,
+		ModifiedAt:     time.Now(),
+	}
+
+	departmentJSON, err := json.Marshal(department)
+	if err != nil {
+		return fmt.Errorf("failed to marshal department: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(departmentID, departmentJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put department state: %v", err)
+	}
+
+	// Create composite key for querying all departments
+	deptIndexKey, err := ctx.GetStub().CreateCompositeKey(DepartmentAllKey, []string{departmentID})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(deptIndexKey, []byte{0x00})
+	if err != nil {
+		return fmt.Errorf("failed to put department index: %v", err)
+	}
+
+	return nil
+}
+
+// GetDepartment retrieves a department by ID
+func (s *SmartContract) GetDepartment(ctx contractapi.TransactionContextInterface, departmentID string) (*Department, error) {
+	// Normalize department ID to uppercase
+	departmentID = strings.ToUpper(departmentID)
+
+	departmentJSON, err := ctx.GetStub().GetState(departmentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read department: %v", err)
+	}
+	if departmentJSON == nil {
+		return nil, fmt.Errorf("department %s does not exist", departmentID)
+	}
+
+	var department Department
+	err = json.Unmarshal(departmentJSON, &department)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal department: %v", err)
+	}
+
+	return &department, nil
+}
+
+// GetAllDepartments retrieves all departments
+func (s *SmartContract) GetAllDepartments(ctx contractapi.TransactionContextInterface) ([]*Department, error) {
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(DepartmentAllKey, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get departments: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var departments []*Department
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate departments: %v", err)
+		}
+
+		_, compositeKeyParts, err := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+		if err != nil {
+			continue
+		}
+
+		departmentID := compositeKeyParts[0]
+		departmentJSON, err := ctx.GetStub().GetState(departmentID)
+		if err != nil || departmentJSON == nil {
+			continue
+		}
+
+		var department Department
+		err = json.Unmarshal(departmentJSON, &department)
+		if err != nil {
+			continue
+		}
+
+		departments = append(departments, &department)
+	}
+
+	return departments, nil
+}
+
+// UpdateDepartment updates department information
+func (s *SmartContract) UpdateDepartment(ctx contractapi.TransactionContextInterface,
+	departmentID string, updateData string) error {
+
+	// Access Control: Only admin can update departments
+	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	if clientMSPID != NITWarangalMSP {
+		return fmt.Errorf("unauthorized: only admin can update departments")
+	}
+
+	department, err := s.GetDepartment(ctx, departmentID)
+	if err != nil {
+		return err
+	}
+
+	var updates map[string]interface{}
+	err = json.Unmarshal([]byte(updateData), &updates)
+	if err != nil {
+		return fmt.Errorf("failed to parse update data: %v", err)
+	}
+
+	// Apply updates
+	if hod, ok := updates["hod"].(string); ok {
+		department.HOD = hod
+	}
+	if email, ok := updates["email"].(string); ok {
+		department.Email = email
+	}
+	if phone, ok := updates["phone"].(string); ok {
+		department.Phone = phone
+	}
+
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client ID: %v", err)
+	}
+
+	department.ModifiedBy = clientID
+	department.ModifiedAt = time.Now()
+
+	departmentJSON, err := json.Marshal(department)
+	if err != nil {
+		return fmt.Errorf("failed to marshal department: %v", err)
+	}
+
+	return ctx.GetStub().PutState(departmentID, departmentJSON)
+}
+
+// departmentExists checks if a department exists
+func (s *SmartContract) departmentExists(ctx contractapi.TransactionContextInterface, departmentID string) (bool, error) {
+	// Normalize department ID to uppercase
+	departmentID = strings.ToUpper(departmentID)
+
+	departmentJSON, err := ctx.GetStub().GetState(departmentID)
+	if err != nil {
+		return false, fmt.Errorf("failed to read department: %v", err)
+	}
+	return departmentJSON != nil, nil
+}
+
+// ==================== Course Offering Management ====================
+
+// CreateCourseOffering creates a new course offering (many-to-many relationship)
+func (s *SmartContract) CreateCourseOffering(ctx contractapi.TransactionContextInterface,
+	departmentID, courseCode, courseName string, credits float64, semester int, academicYear string) error {
+
+	// Access Control: Department or Admin can create course offerings
+	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	if clientMSPID != DepartmentsMSP && clientMSPID != NITWarangalMSP {
+		return fmt.Errorf("unauthorized: only department or admin can create course offerings")
+	}
+
+	// Normalize department ID to uppercase
+	departmentID = strings.ToUpper(departmentID)
+
+	// Verify department exists
+	exists, err := s.departmentExists(ctx, departmentID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("department %s does not exist", departmentID)
+	}
+
+	// Validate credits
+	if err := validateCredits(credits); err != nil {
+		return err
+	}
+
+	// Validate semester
+	if err := validateSemester(semester); err != nil {
+		return err
+	}
+
+	// Create unique offering ID
+	offeringID := fmt.Sprintf("%s-%s-%d-%s", departmentID, courseCode, semester, academicYear)
+
+	// Check if offering already exists
+	offeringJSON, err := ctx.GetStub().GetState(offeringID)
+	if err != nil {
+		return fmt.Errorf("failed to read offering: %v", err)
+	}
+	if offeringJSON != nil {
+		return fmt.Errorf("course offering %s already exists", offeringID)
+	}
+
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client ID: %v", err)
+	}
+
+	offering := CourseOffering{
+		OfferingID:   offeringID,
+		DepartmentID: departmentID,
+		CourseCode:   courseCode,
+		CourseName:   courseName,
+		Credits:      credits,
+		Semester:     semester,
+		AcademicYear: academicYear,
+		IsActive:     true,
+		CreatedBy:    clientID,
+		CreatedAt:    time.Now(),
+		ModifiedBy:   clientID,
+		ModifiedAt:   time.Now(),
+	}
+
+	offeringJSON, err = json.Marshal(offering)
+	if err != nil {
+		return fmt.Errorf("failed to marshal offering: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(offeringID, offeringJSON)
+	if err != nil {
+		return fmt.Errorf("failed to put offering state: %v", err)
+	}
+
+	// Create composite key for querying by department
+	deptCourseKey, err := ctx.GetStub().CreateCompositeKey(CourseDeptKey, []string{departmentID, offeringID})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key: %v", err)
+	}
+
+	err = ctx.GetStub().PutState(deptCourseKey, []byte{0x00})
+	if err != nil {
+		return fmt.Errorf("failed to put course-dept index: %v", err)
+	}
+
+	return nil
+}
+
+// GetCourseOffering retrieves a course offering by ID
+func (s *SmartContract) GetCourseOffering(ctx contractapi.TransactionContextInterface, offeringID string) (*CourseOffering, error) {
+	offeringJSON, err := ctx.GetStub().GetState(offeringID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read course offering: %v", err)
+	}
+	if offeringJSON == nil {
+		return nil, fmt.Errorf("course offering %s does not exist", offeringID)
+	}
+
+	var offering CourseOffering
+	err = json.Unmarshal(offeringJSON, &offering)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal course offering: %v", err)
+	}
+
+	return &offering, nil
+}
+
+// GetCoursesByDepartment retrieves all courses offered by a department
+func (s *SmartContract) GetCoursesByDepartment(ctx contractapi.TransactionContextInterface, departmentID string) ([]*CourseOffering, error) {
+	// Normalize department ID to uppercase
+	departmentID = strings.ToUpper(departmentID)
+
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(CourseDeptKey, []string{departmentID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get courses: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var courses []*CourseOffering
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate courses: %v", err)
+		}
+
+		_, compositeKeyParts, err := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+		if err != nil {
+			continue
+		}
+
+		offeringID := compositeKeyParts[1]
+		offeringJSON, err := ctx.GetStub().GetState(offeringID)
+		if err != nil || offeringJSON == nil {
+			continue
+		}
+
+		var offering CourseOffering
+		err = json.Unmarshal(offeringJSON, &offering)
+		if err != nil {
+			continue
+		}
+
+		courses = append(courses, &offering)
+	}
+
+	return courses, nil
+}
+
+// UpdateCourseOffering updates course offering details
+func (s *SmartContract) UpdateCourseOffering(ctx contractapi.TransactionContextInterface,
+	offeringID string, isActive bool) error {
+
+	// Access Control: Department or Admin
+	clientMSPID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	if clientMSPID != DepartmentsMSP && clientMSPID != NITWarangalMSP {
+		return fmt.Errorf("unauthorized: only department or admin can update course offerings")
+	}
+
+	offering, err := s.GetCourseOffering(ctx, offeringID)
+	if err != nil {
+		return err
+	}
+
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client ID: %v", err)
+	}
+
+	offering.IsActive = isActive
+	offering.ModifiedBy = clientID
+	offering.ModifiedAt = time.Now()
+
+	offeringJSON, err := json.Marshal(offering)
+	if err != nil {
+		return fmt.Errorf("failed to marshal offering: %v", err)
+	}
+
+	return ctx.GetStub().PutState(offeringID, offeringJSON)
+}
+
+// GetStudentsByDepartment retrieves students by department (replaces GetStudentsByFaculty)
+func (s *SmartContract) GetStudentsByDepartment(ctx contractapi.TransactionContextInterface, department string) ([]*Student, error) {
+	// Normalize department to uppercase for case-insensitive matching
+	department = strings.ToUpper(department)
+
+	// Department can view their own students
+	err := checkDepartmentAccess(ctx, department)
+	if err != nil {
+		// Allow admin to view any department
+		clientMSPID, mspErr := ctx.GetClientIdentity().GetMSPID()
+		if mspErr != nil || clientMSPID != NITWarangalMSP {
+			return nil, err
+		}
+	}
+
+	// Use composite key instead of CouchDB query for LevelDB compatibility
+	resultsIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(StudentDeptKey, []string{department})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query students: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var students []*Student
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate students: %v", err)
+		}
+
+		// Extract roll number from composite key
+		_, compositeKeyParts, err := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+		if err != nil {
+			continue
+		}
+
+		if len(compositeKeyParts) < 2 {
+			continue
+		}
+
+		rollNumber := compositeKeyParts[1] // student~dept~{Department}~{RollNumber}
+
+		// Get student record
+		studentJSON, err := ctx.GetStub().GetState(rollNumber)
+		if err != nil || studentJSON == nil {
+			continue
+		}
+
+		var student Student
+		err = json.Unmarshal(studentJSON, &student)
+		if err != nil {
+			continue
+		}
+
+		students = append(students, &student)
+	}
+
+	return students, nil
 }
 
 func main() {
