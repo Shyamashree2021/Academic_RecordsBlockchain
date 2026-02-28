@@ -32,6 +32,7 @@ services:
     volumes:
       - ../organizations/fabric-ca/ordererOrg:/etc/hyperledger/fabric-ca-server
     container_name: ca_orderer
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -53,6 +54,7 @@ services:
     volumes:
       - ../organizations/fabric-ca/nitwarangal:/etc/hyperledger/fabric-ca-server
     container_name: ca_nitwarangal
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -74,6 +76,7 @@ services:
     volumes:
       - ../organizations/fabric-ca/departments:/etc/hyperledger/fabric-ca-server
     container_name: ca_departments
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -95,6 +98,7 @@ services:
     volumes:
       - ../organizations/fabric-ca/verifiers:/etc/hyperledger/fabric-ca-server
     container_name: ca_verifiers
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -136,6 +140,7 @@ services:
       - 7050:7050
       - 7053:7053
       - 9443:9443
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -173,6 +178,7 @@ services:
     ports:
       - 7051:7051
       - 9446:9446
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -210,6 +216,7 @@ services:
     ports:
       - 9051:9051
       - 9448:9448
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -247,6 +254,7 @@ services:
     ports:
       - 11051:11051
       - 9450:9450
+    restart: unless-stopped
     networks:
       - nitw
 
@@ -282,5 +290,6 @@ services:
       - peer0.nitwarangal.nitw.edu
       - peer0.departments.nitw.edu
       - peer0.verifiers.nitw.edu
+    restart: unless-stopped
     networks:
       - nitw

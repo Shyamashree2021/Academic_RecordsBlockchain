@@ -8,6 +8,10 @@
 set -e
 set -o pipefail
 
+# Add Fabric binaries to PATH
+export PATH="${PWD}/bin:${PATH}"
+export FABRIC_CFG_PATH="${PWD}/configtx"
+
 # Import utils
 . scripts/utils.sh
 
@@ -59,6 +63,9 @@ createIdentities() {
     docker-compose -f docker/docker-compose-net.yaml up -d ca_orderer ca_nitwarangal ca_departments ca_verifiers
     infoln "Waiting for Fabric CAs to initialize..."
     sleep 10 # Wait for CAs to start and generate their certificates
+
+    # Fix ownership so host user can write into the organizations directory
+    sudo chown -R "$(id -u):$(id -g)" "${PWD}/organizations" 2>/dev/null || true
 
     # Make the enrollment script executable
     chmod +x scripts/registerEnroll.sh
@@ -269,6 +276,30 @@ testChaincode() {
 }
 
 
+# ------------------------------------------------------------
+# Stop network (preserve data)
+# ------------------------------------------------------------
+stopNetwork() {
+    printHeader "Stopping Fabric network (data preserved)..."
+    if [ -f "docker/docker-compose-net.yaml" ]; then
+        docker-compose -f docker/docker-compose-net.yaml stop 2>/dev/null
+    fi
+    successln "Network stopped. Data is preserved in Docker volumes."
+}
+
+# ------------------------------------------------------------
+# Start a previously stopped network (no wipe)
+# ------------------------------------------------------------
+startExistingNetwork() {
+    printHeader "Starting existing Fabric network..."
+    if [ -f "docker/docker-compose-net.yaml" ]; then
+        docker-compose -f docker/docker-compose-net.yaml start 2>/dev/null
+    fi
+    sleep 5
+    docker ps --format "table {{.Names}}\t{{.Status}}"
+    successln "Network restarted with existing data."
+}
+
 # --- Main execution logic ---
 case "$1" in
   up)
@@ -278,13 +309,30 @@ case "$1" in
     createChannelAndJoinPeers
     deployChaincode
     testChaincode
-    printHeader "🎉🎉🎉 NETWORK IS UP AND RUNNING! 🎉🎉🎉"
+    printHeader "NETWORK IS UP AND RUNNING!"
+    ;;
+  stop)
+    stopNetwork
+    ;;
+  start)
+    startExistingNetwork
+    ;;
+  restart)
+    stopNetwork
+    sleep 2
+    startExistingNetwork
     ;;
   clean)
     cleanup
     ;;
   *)
-    echo "Usage: ./network.sh up | clean"
+    echo "Usage: ./network.sh up | stop | start | restart | clean"
+    echo ""
+    echo "  up       - Fresh setup: wipe everything and create new network"
+    echo "  stop     - Stop containers (data preserved)"
+    echo "  start    - Start previously stopped containers (data preserved)"
+    echo "  restart  - Stop and start containers (data preserved)"
+    echo "  clean    - Remove all containers, volumes, and artifacts"
     exit 1
     ;;
 esac
