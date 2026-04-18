@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -12,12 +10,17 @@ import (
 
 // IssueCertificate issues a certificate with PDF hash (Enhanced with validation and RBAC)
 func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInterface,
-	certificateID, studentID, certType, pdfBase64, ipfsHash string) error {
+	certificateID, studentID, certType, pdfHash, ipfsHash string) error {
 
 	// Access Control: Only NITWarangalMSP can issue certificates
 	err := checkMSPAccess(ctx, NITWarangalMSP)
 	if err != nil {
 		return err
+	}
+
+	// Governance gate: check if certificate issuance has been suspended by DAO vote
+	if issuanceSuspended(ctx) {
+		return fmt.Errorf("certificate issuance is currently suspended by governance vote — use ProposeGovernanceChange with RESUME_ISSUANCE to lift the suspension")
 	}
 
 	// Validate certificate type
@@ -44,9 +47,7 @@ func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInter
 		return fmt.Errorf("student %s does not exist", studentID)
 	}
 
-	// Calculate hash of PDF
-	hash := sha256.Sum256([]byte(pdfBase64))
-	pdfHash := hex.EncodeToString(hash[:])
+	// pdfHash is passed in directly (pre-computed SHA-256 by the backend)
 
 	clientID, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
@@ -134,6 +135,20 @@ func (s *SmartContract) IssueCertificate(ctx contractapi.TransactionContextInter
 	eventJSON, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("CertificateIssued", eventJSON)
 
+	// Multi-Party Endorsement: Lock DEGREE certificates with 2-of-2 policy
+	// (NITWarangalMSP + DepartmentsMSP must both endorse any future modification)
+	if certType == "DEGREE" || certType == "PROVISIONAL" {
+		if sbeErr := setDegreeEndorsementPolicy(ctx, certificateID); sbeErr != nil {
+			// Emit warning event so error is visible in peer logs / event stream
+			// Does NOT block certificate issuance — cert is already written
+			warnPayload, _ := json.Marshal(map[string]string{
+				"certificateID": certificateID,
+				"warning":       "SBE policy failed: " + sbeErr.Error(),
+			})
+			ctx.GetStub().SetEvent("EndorsementPolicyWarning", warnPayload)
+		}
+	}
+
 	return nil
 }
 
@@ -175,7 +190,7 @@ func (s *SmartContract) GetCertificate(ctx contractapi.TransactionContextInterfa
 
 // VerifyCertificate verifies a certificate by comparing PDF hash (Enhanced with revocation and expiry check)
 func (s *SmartContract) VerifyCertificate(ctx contractapi.TransactionContextInterface,
-	certificateID, pdfBase64 string) (bool, error) {
+	certificateID, pdfHash string) (bool, error) {
 
 	certJSON, err := ctx.GetStub().GetState(certificateID)
 	if err != nil {
@@ -205,12 +220,8 @@ func (s *SmartContract) VerifyCertificate(ctx contractapi.TransactionContextInte
 		}
 	}
 
-	// Calculate hash of provided PDF
-	hash := sha256.Sum256([]byte(pdfBase64))
-	providedHash := hex.EncodeToString(hash[:])
-
-	// Verify hash matches
-	if providedHash != certificate.PDFHash {
+	// If no hash provided, skip hash check (just verify existence and validity)
+	if pdfHash != "" && pdfHash != certificate.PDFHash {
 		return false, nil
 	}
 

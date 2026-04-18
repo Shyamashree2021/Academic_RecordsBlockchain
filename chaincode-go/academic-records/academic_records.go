@@ -105,6 +105,19 @@ func (s *SmartContract) CreateAcademicRecord(ctx contractapi.TransactionContextI
 	// Calculate GPA for this semester
 	_, sgpa := calculateGrades(courses)
 
+	// AI Policy Check: evaluate against active AI-generated rules before saving
+	tempRecord := AcademicRecord{
+		StudentID:    rollNumber,
+		Department:   department,
+		Semester:     semester,
+		Courses:      courses,
+		TotalCredits: totalCredits,
+		SGPA:         sgpa,
+	}
+	if policyDecision, policyReason := evaluateAIPolicy(ctx, tempRecord); policyDecision == "BLOCK" {
+		return fmt.Errorf("record blocked by AI policy: %s", policyReason)
+	}
+
 	clientID, err := ctx.GetClientIdentity().GetID()
 	if err != nil {
 		return fmt.Errorf("failed to get client identity: %v", err)
@@ -196,7 +209,7 @@ func (s *SmartContract) CreateAcademicRecord(ctx contractapi.TransactionContextI
 		return fmt.Errorf("failed to put state for all records key: %w", err)
 	}
 
-	// Emit event
+	// Emit RecordCreated event
 	eventPayload := map[string]interface{}{
 		"recordID":     recordID,
 		"rollNumber":   rollNumber,
@@ -212,6 +225,9 @@ func (s *SmartContract) CreateAcademicRecord(ctx contractapi.TransactionContextI
 	}
 	eventJSONBytes, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("RecordCreated", eventJSONBytes)
+
+	// AI On-Chain Scoring: compute deterministic fraud score and notify AI agent
+	s.storeOnChainScoreAndNotify(ctx, recordID, record)
 
 	return nil
 }
@@ -362,6 +378,14 @@ func (s *SmartContract) ApproveAcademicRecord(ctx contractapi.TransactionContext
 	}
 	eventJSON, _ := json.Marshal(eventPayload)
 	ctx.GetStub().SetEvent("RecordApproved", eventJSON)
+
+	// Multi-Party Endorsement: Lock approved record with 2-of-2 policy
+	// After final approval, this record cannot be modified without both
+	// NITWarangalMSP AND DepartmentsMSP endorsing the transaction
+	if err := setRecordEndorsementPolicy(ctx, recordID); err != nil {
+		// Non-blocking — record is approved, SBE is an additional security layer
+		_ = err
+	}
 
 	return nil
 }

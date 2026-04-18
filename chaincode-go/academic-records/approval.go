@@ -88,7 +88,7 @@ func (s *SmartContract) SubmitAcademicRecord(ctx contractapi.TransactionContextI
 
 // DeptApproveAcademicRecord moves a SUBMITTED record to DEPT_APPROVED (department-level approval)
 func (s *SmartContract) DeptApproveAcademicRecord(ctx contractapi.TransactionContextInterface, recordID string) error {
-	err := checkMSPAccess(ctx, DepartmentsMSP)
+	err := checkMSPAccess(ctx, DepartmentsMSP, NITWarangalMSP)
 	if err != nil {
 		return err
 	}
@@ -102,10 +102,13 @@ func (s *SmartContract) DeptApproveAcademicRecord(ctx contractapi.TransactionCon
 		return fmt.Errorf("can only department-approve records with SUBMITTED status; current status is '%s'", record.Status)
 	}
 
-	// Verify department user belongs to same department as the record
-	err = checkClientAttribute(ctx, "department", record.Department)
-	if err != nil {
-		return fmt.Errorf("department mismatch for approval: %w", err)
+	// If DepartmentsMSP, verify department user belongs to same department as the record
+	clientMSPID, _ := ctx.GetClientIdentity().GetMSPID()
+	if clientMSPID == DepartmentsMSP {
+		err = checkClientAttribute(ctx, "department", record.Department)
+		if err != nil {
+			return fmt.Errorf("department mismatch for approval: %w", err)
+		}
 	}
 
 	// Update status composite keys

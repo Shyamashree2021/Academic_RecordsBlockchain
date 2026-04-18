@@ -7,5 +7,14 @@
     "blockToLive": 0,
     "memberOnlyRead": true,
     "memberOnlyWrite": true
+  },
+  {
+    "name": "sensitiveAcademicCollection",
+    "policy": "OR('NITWarangalMSP.member', 'DepartmentsMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true
   }
 ]

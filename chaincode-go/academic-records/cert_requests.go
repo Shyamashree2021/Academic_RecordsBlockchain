@@ -96,7 +96,7 @@ func (s *SmartContract) RequestCertificate(ctx contractapi.TransactionContextInt
 
 // RecommendCertificateRequest moves a REQUESTED certificate request to RECOMMENDED
 func (s *SmartContract) RecommendCertificateRequest(ctx contractapi.TransactionContextInterface, requestID string) error {
-	err := checkMSPAccess(ctx, DepartmentsMSP)
+	err := checkMSPAccess(ctx, DepartmentsMSP, NITWarangalMSP)
 	if err != nil {
 		return err
 	}

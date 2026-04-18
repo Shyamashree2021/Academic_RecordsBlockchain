@@ -26,6 +26,7 @@ services:
       - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:17054
       - FABRIC_CA_SERVER_CSR_HOSTS=ca-orderer,localhost
       - FABRIC_CA_SERVER_CSR_CN=ca-orderer.nitw.edu
+      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server/msp/keystore/ca_key.pem
     ports:
       - "7054:7054"
       - "17054:17054"
@@ -48,6 +49,7 @@ services:
       - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:18054
       - FABRIC_CA_SERVER_CSR_HOSTS=ca-nitwarangal,localhost
       - FABRIC_CA_SERVER_CSR_CN=ca-nitwarangal.nitw.edu
+      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server/msp/keystore/ca_key.pem
     ports:
       - "8054:8054"
       - "18054:18054"
@@ -70,6 +72,7 @@ services:
       - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:19054
       - FABRIC_CA_SERVER_CSR_HOSTS=ca-departments,localhost
       - FABRIC_CA_SERVER_CSR_CN=ca-departments.nitw.edu
+      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server/msp/keystore/ca_key.pem
     ports:
       - "9054:9054"
       - "19054:19054"
@@ -92,6 +95,7 @@ services:
       - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:21054
       - FABRIC_CA_SERVER_CSR_HOSTS=ca-verifiers,localhost
       - FABRIC_CA_SERVER_CSR_CN=ca-verifiers.nitw.edu
+      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server/msp/keystore/ca_key.pem
     ports:
       - "11054:11054"
       - "21054:21054"

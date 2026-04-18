@@ -16,6 +16,13 @@ function createNITWarangal() {
   export FABRIC_CA_CLIENT_HOME=${PWD}/organizations/peerOrganizations/nitwarangal.nitw.edu/
 
   fabric-ca-client enroll -u https://admin:adminpw@localhost:8054 --caname ca-nitwarangal --tls.certfiles "${PWD}/organizations/fabric-ca/nitwarangal/ca-cert.pem"
+  # Remove client key from CA keystore - keep only the CA's own key
+  CA_KEY=$(openssl x509 -noout -pubkey -in "${PWD}/organizations/fabric-ca/nitwarangal/ca-cert.pem" 2>/dev/null)
+  for k in ${PWD}/organizations/fabric-ca/nitwarangal/msp/keystore/*_sk; do
+    [ -f "$k" ] || continue
+    KP=$(openssl ec -pubout -in "$k" 2>/dev/null)
+    [ "$CA_KEY" != "$KP" ] && rm -f "$k" && echo "Removed stale client key: $k"
+  done
 
   echo 'NodeOUs:
   Enable: true
@@ -86,6 +93,12 @@ function createDepartments() {
   export FABRIC_CA_CLIENT_HOME=${PWD}/organizations/peerOrganizations/departments.nitw.edu/
 
   fabric-ca-client enroll -u https://admin:adminpw@localhost:9054 --caname ca-departments --tls.certfiles "${PWD}/organizations/fabric-ca/departments/ca-cert.pem"
+  CA_KEY=$(openssl x509 -noout -pubkey -in "${PWD}/organizations/fabric-ca/departments/ca-cert.pem" 2>/dev/null)
+  for k in ${PWD}/organizations/fabric-ca/departments/msp/keystore/*_sk; do
+    [ -f "$k" ] || continue
+    KP=$(openssl ec -pubout -in "$k" 2>/dev/null)
+    [ "$CA_KEY" != "$KP" ] && rm -f "$k" && echo "Removed stale client key: $k"
+  done
 
   echo 'NodeOUs:
   Enable: true
@@ -161,6 +174,12 @@ function createVerifiers() {
   export FABRIC_CA_CLIENT_HOME=${PWD}/organizations/peerOrganizations/verifiers.nitw.edu/
 
   fabric-ca-client enroll -u https://admin:adminpw@localhost:11054 --caname ca-verifiers --tls.certfiles "${PWD}/organizations/fabric-ca/verifiers/ca-cert.pem"
+  CA_KEY=$(openssl x509 -noout -pubkey -in "${PWD}/organizations/fabric-ca/verifiers/ca-cert.pem" 2>/dev/null)
+  for k in ${PWD}/organizations/fabric-ca/verifiers/msp/keystore/*_sk; do
+    [ -f "$k" ] || continue
+    KP=$(openssl ec -pubout -in "$k" 2>/dev/null)
+    [ "$CA_KEY" != "$KP" ] && rm -f "$k" && echo "Removed stale client key: $k"
+  done
 
   echo 'NodeOUs:
   Enable: true
@@ -226,6 +245,12 @@ function createOrderer() {
   export FABRIC_CA_CLIENT_HOME=${PWD}/organizations/ordererOrganizations/nitw.edu
 
   fabric-ca-client enroll -u https://admin:adminpw@localhost:7054 --caname ca-orderer --tls.certfiles "${PWD}/organizations/fabric-ca/ordererOrg/ca-cert.pem"
+  CA_KEY=$(openssl x509 -noout -pubkey -in "${PWD}/organizations/fabric-ca/ordererOrg/ca-cert.pem" 2>/dev/null)
+  for k in ${PWD}/organizations/fabric-ca/ordererOrg/msp/keystore/*_sk; do
+    [ -f "$k" ] || continue
+    KP=$(openssl ec -pubout -in "$k" 2>/dev/null)
+    [ "$CA_KEY" != "$KP" ] && rm -f "$k" && echo "Removed stale client key: $k"
+  done
 
   echo 'NodeOUs:
   Enable: true

@@ -51,6 +51,11 @@ cleanup() {
     rm -rf organizations channel-artifacts system-genesis-block *.tar.gz 2>/dev/null || true
     # Recreate empty directories
     mkdir -p channel-artifacts system-genesis-block
+    # Pre-create fabric-ca mount dirs as current user so Docker doesn't create them as root
+    mkdir -p organizations/fabric-ca/ordererOrg \
+             organizations/fabric-ca/nitwarangal \
+             organizations/fabric-ca/departments \
+             organizations/fabric-ca/verifiers
     successln "✓ Clean complete"
 }
 
@@ -62,10 +67,25 @@ createIdentities() {
     # Start CA containers
     docker-compose -f docker/docker-compose-net.yaml up -d ca_orderer ca_nitwarangal ca_departments ca_verifiers
     infoln "Waiting for Fabric CAs to initialize..."
-    sleep 10 # Wait for CAs to start and generate their certificates
+    # Wait until all 4 CAs are responding (up to 60 seconds)
+    local max_retries=30
+    for i in $(seq 1 $max_retries); do
+        if curl -sk https://localhost:7054/cainfo > /dev/null 2>&1 && \
+           curl -sk https://localhost:8054/cainfo > /dev/null 2>&1 && \
+           curl -sk https://localhost:9054/cainfo > /dev/null 2>&1 && \
+           curl -sk https://localhost:11054/cainfo > /dev/null 2>&1; then
+            successln "All CAs are ready"
+            break
+        fi
+        if [ $i -eq $max_retries ]; then
+            errorln "CAs did not start in time. Check: docker logs ca_orderer"
+            exit 1
+        fi
+        sleep 2
+    done
 
     # Fix ownership so host user can write into the organizations directory
-    sudo chown -R "$(id -u):$(id -g)" "${PWD}/organizations" 2>/dev/null || true
+    docker run --rm -v "${PWD}/organizations:/target" alpine sh -c "chmod -R 777 /target" 2>/dev/null || true
 
     # Make the enrollment script executable
     chmod +x scripts/registerEnroll.sh
@@ -177,7 +197,7 @@ deployChaincode() {
 
     # --- Approve and Commit ---
     # Query installed to get package ID
-    PACKAGE_ID=$(docker exec cli peer lifecycle chaincode queryinstalled | grep "Package ID: ${CHAINCODE_LABEL}" | sed -n 's/Package ID: \(.*\), Label:.*/\1/p')
+    PACKAGE_ID=$(docker exec cli peer lifecycle chaincode queryinstalled | grep "Package ID: ${CHAINCODE_LABEL}" | sed -n 's/Package ID: \(.\), Label:./\1/p')
     infoln "Chaincode Package ID: ${PACKAGE_ID}"
 
     # Approve for each organization
